@@ -1,0 +1,33 @@
+﻿{
+  "FileVersion": 3,
+  "Version": 1,
+  "VersionName": "1.0",
+  "FriendlyName": "LohProceduralPlugin",
+  "Description": "",
+  "Category": "LohPlugin",
+  "CreatedBy": "Loh Zhi Kang",
+  "CreatedByURL": "",
+  "DocsURL": "",
+  "MarketplaceURL": "",
+  "CanContainContent": true,
+  "IsBetaVersion": true,
+  "IsExperimentalVersion": false,
+  "Installed": false,
+  "Modules": [
+    {
+      "Name": "LohProceduralPlugin",
+      "Type": "Runtime",
+      "LoadingPhase": "Default"
+    }
+  ],
+  "Plugins": [
+    {
+      "Name": "GeometryProcessing",
+      "Enabled": true
+    },
+    {
+      "Name": "LohFunctionPlugin",
+      "Enabled": true
+    }
+  ]
+}
