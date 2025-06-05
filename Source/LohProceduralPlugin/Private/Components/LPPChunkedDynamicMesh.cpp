@@ -75,9 +75,11 @@ void ULPPChunkedDynamicMesh::ApplyTransform ( const FTransform3d& Transform , bo
 
 void ULPPChunkedDynamicMesh::ClearMesh ( )
 {
-	if ( MeshObject )
+	if ( ensure ( MeshObject ) )
 	{
 		MeshObject->EditMesh ( [] ( UE::Geometry::FDynamicMesh3& MeshData ) { MeshData.Clear ( ); } );
+
+		InvalidatePhysicsData ( );
 
 		NotifyMeshUpdated ( );
 	}
@@ -112,6 +114,7 @@ void ULPPChunkedDynamicMesh::ApplyChange ( const FMeshReplacementChange* Change 
 
 void ULPPChunkedDynamicMesh::NotifyMeshUpdated ( )
 {
+	RebuildPhysicsData ( );
 	UpdateLocalBounds ( );
 	MarkRenderStateDirty ( );
 }
@@ -209,7 +212,7 @@ bool ULPPChunkedDynamicMesh::GetPhysicsTriMeshData ( struct FTriMeshCollisionDat
 
 		CollisionData->bFlipNormals    = true;
 		CollisionData->bDeformableMesh = false;
-		CollisionData->bFastCook       = true;
+		CollisionData->bFastCook       = false;
 	} );
 
 	return true;
@@ -247,7 +250,13 @@ void ULPPChunkedDynamicMesh::InvalidatePhysicsData ( )
 	if ( GetBodySetup ( ) )
 	{
 		GetBodySetup ( )->InvalidatePhysicsData ( );
-		GetBodySetup ( )->ClearPhysicsMeshes ( );
+
+		bIsBodyInvalid = true;
+
+		if ( FBaseDynamicMeshSceneProxy* Proxy = GetBaseSceneProxy ( ) )
+		{
+			Proxy->SetCollisionData ( );
+		}
 	}
 }
 
@@ -264,7 +273,6 @@ void ULPPChunkedDynamicMesh::RebuildPhysicsData ( )
 	}
 	else if ( GetMesh ( )->TriangleCount ( ) > 0 )
 	{
-		MeshBodySetup->ClearPhysicsMeshes ( );
 		MeshBodySetup->RemoveSimpleCollision ( );
 		MeshBodySetup->AddCollisionFrom ( this->AggGeom );
 

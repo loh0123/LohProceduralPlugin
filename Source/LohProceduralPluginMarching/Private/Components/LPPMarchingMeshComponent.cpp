@@ -177,11 +177,6 @@ void ULPPMarchingMeshComponent::ClearRender ( )
 
 	AggGeom.EmptyElements ( );
 
-	if ( IsValid ( GetBodySetup ( ) ) )
-	{
-		InvalidatePhysicsData ( );
-	}
-
 	ClearMesh ( );
 }
 
@@ -1322,7 +1317,7 @@ TUniquePtr < FDistanceFieldVolumeData > ULPPMarchingMeshComponent::ComputeNewDis
 				OutMip.BulkOffset = StreamableMipData.Num ( );
 				StreamableMipData.AddUninitialized ( MipDataBytes );
 				OutMip.BulkSize = StreamableMipData.Num ( ) - OutMip.BulkOffset;
-				checkf ( OutMip.BulkSize > 0 , TEXT("DynamicMeshComponent - BulkSize was 0 with %ux%ux%u indirection") , IndirectionDimensions.X , IndirectionDimensions.Y , IndirectionDimensions.Z );
+				checkf ( OutMip.BulkSize > 0 , TEXT("MarchingDynamicMeshComponent - BulkSize was 0 with %ux%ux%u indirection") , IndirectionDimensions.X , IndirectionDimensions.Y , IndirectionDimensions.Z );
 
 				FPlatformMemory::Memcpy ( &StreamableMipData [ OutMip.BulkOffset ] , IndirectionTable.GetData ( ) , IndirectionTableBytes );
 

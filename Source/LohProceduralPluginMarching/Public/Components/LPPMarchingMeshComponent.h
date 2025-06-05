@@ -248,7 +248,7 @@ private:
 
 	TAsyncMarchingData DistanceFieldComputeData = TAsyncMarchingData ( this );
 
-	// Modify to use ParallelFor
+	// Modify to use ParallelFor. Copy from dynamic mesh
 	static TUniquePtr < FDistanceFieldVolumeData > ComputeNewDistanceField_TaskFunctionV2 ( FProgressCancel& Progress , const FDynamicMesh3& Mesh , const bool bGenerateAsIfTwoSided , const float CurrentDistanceFieldResolutionScale );
 
 	// Add Safety

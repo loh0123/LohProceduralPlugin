@@ -32,8 +32,6 @@ protected:
 
 	TSharedPtr < FDistanceFieldVolumeData > DistanceFieldData;
 
-	TUniquePtr < FCardRepresentationData > MeshCardsData;
-
 public:
 
 	FLPPChunkedDynamicMeshProxy ( ULPPChunkedDynamicMesh* Component ) : FBaseDynamicMeshSceneProxy ( Component )
@@ -140,23 +138,18 @@ public:
 
 	void SetLumenData ( const TArray < class FLumenCardBuildData >& InLumenCardData , const FBox& InLumenBound )
 	{
-		if ( MeshCardsData.IsValid ( ) == false )
+		if ( MeshCards.IsValid ( ) == false )
 		{
-			MeshCardsData = MakeUnique < FCardRepresentationData > ( );
+			MeshCards = MakePimpl < FCardRepresentationData > ( );
 		}
 
-		FMeshCardsBuildData& MeshCardData = MeshCardsData.Get ( )->MeshCardsBuildData;
+		FMeshCardsBuildData& MeshCardData = MeshCards.Get ( )->MeshCardsBuildData;
 
 		MeshCardData.bMostlyTwoSided = false;
 		MeshCardData.Bounds          = InLumenBound;
 		MeshCardData.CardBuildData   = InLumenCardData;
 
 		UpdateVisibleInLumenScene ( );
-	}
-
-	virtual const FCardRepresentationData* GetMeshCardRepresentation ( ) const override
-	{
-		return MeshCardsData.Get ( );
 	}
 
 	virtual void GetDistanceFieldAtlasData ( const class FDistanceFieldVolumeData*& OutDistanceFieldData , float& SelfShadowBias ) const override
