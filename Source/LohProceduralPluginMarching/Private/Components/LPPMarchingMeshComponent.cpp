@@ -238,12 +238,11 @@ bool ULPPMarchingMeshComponent::UpdateRender ( const bool bSimplify )
 
 	GetFaceCullingSetting ( PassData.bIsChunkFaceCullingDisable , PassData.bIsRegionFaceCullingDisable );
 
-	PassData.MeshFullSize   = GetMeshSize ( );
-	PassData.DataSize       = GetDataSize ( );
-	PassData.bSimplify      = bSimplify;
-	PassData.BoundExpand    = BoundExpand;
-	PassData.StartTime      = FDateTime::UtcNow ( );
-	PassData.bNeedCollision = IsCollisionEnabled ( ) && bOverrideBoxCollision;
+	PassData.MeshFullSize = GetMeshSize ( );
+	PassData.DataSize     = GetDataSize ( );
+	PassData.bSimplify    = bSimplify;
+	PassData.BoundExpand  = BoundExpand;
+	PassData.StartTime    = FDateTime::UtcNow ( );
 
 	PassData.RenderSetting = RenderSetting;
 
@@ -825,7 +824,6 @@ TUniquePtr < FLFPMarchingThreadData > ULPPMarchingMeshComponent::ComputeNewMarch
 	}
 
 	// Collision Box
-	if ( PassData.bNeedCollision )
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE ( MarchingMesh_GeneratingBoxCollision );
 
@@ -996,10 +994,7 @@ void ULPPMarchingMeshComponent::ComputeNewMarchingMesh_Completed ( TUniquePtr < 
 
 					LocalThreadData->MeshData.Clear ( );
 
-					if ( bOverrideBoxCollision )
-					{
-						AggGeom.BoxElems = LocalThreadData->CollisionBoxElems;
-					}
+					AggGeom.BoxElems = LocalThreadData->CollisionBoxElems;
 
 					RebuildPhysicsData ( );
 

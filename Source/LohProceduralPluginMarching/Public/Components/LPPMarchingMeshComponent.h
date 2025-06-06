@@ -56,7 +56,6 @@ struct FLFPMarchingPassData
 
 public:
 
-	bool       bNeedCollision              = false;
 	bool       bIsChunkFaceCullingDisable  = false;
 	bool       bIsRegionFaceCullingDisable = false;
 	bool       bSimplify                   = false;
@@ -143,12 +142,6 @@ protected:
 
 	UPROPERTY ( EditDefaultsOnly , Category="Setting" )
 	float BoundExpand = 25.0f;
-
-	UPROPERTY ( EditDefaultsOnly , Category="Setting" )
-	bool bForceTwoSide = true;
-
-	UPROPERTY ( EditDefaultsOnly , Category="Setting" )
-	bool bOverrideBoxCollision = true;
 
 	UPROPERTY ( EditDefaultsOnly , Category="Setting" )
 	bool bGenerateDistanceField = false;
