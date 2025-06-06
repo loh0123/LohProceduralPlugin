@@ -42,13 +42,6 @@ void ULPPMarchingMeshComponent::EndPlay ( const EEndPlayReason::Type EndPlayReas
 	Super::EndPlay ( EndPlayReason );
 
 	ClearRender ( );
-
-	if ( IsValid ( MeshBodySetup ) )
-	{
-		MeshBodySetup->InvalidatePhysicsData ( );
-		MeshBodySetup->MarkAsGarbage ( );
-		MeshBodySetup = nullptr;
-	}
 }
 
 // Called every frame

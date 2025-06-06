@@ -28,6 +28,13 @@ void ULPPChunkedDynamicMesh::BeginPlay ( )
 	// ...
 }
 
+void ULPPChunkedDynamicMesh::EndPlay ( const EEndPlayReason::Type EndPlayReason )
+{
+	Super::EndPlay ( EndPlayReason );
+
+	InvalidatePhysicsData ( );
+}
+
 
 // Called every frame
 void ULPPChunkedDynamicMesh::TickComponent ( float DeltaTime , ELevelTick TickType , FActorComponentTickFunction* ThisTickFunction )
@@ -272,7 +279,7 @@ void ULPPChunkedDynamicMesh::RebuildPhysicsData ( )
 	{
 		MeshBodySetup->AbortPhysicsMeshAsyncCreation ( );
 	}
-	
+
 	if ( GetMesh ( )->TriangleCount ( ) > 0 )
 	{
 		MeshBodySetup->CreatePhysicsMeshesAsync ( FOnAsyncPhysicsCookFinished::CreateUObject ( this , &ULPPChunkedDynamicMesh::FinishPhysicsAsyncCook , MeshBodySetup.Get ( ) ) );
