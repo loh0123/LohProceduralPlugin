@@ -249,9 +249,10 @@ void ULPPChunkedDynamicMesh::InvalidatePhysicsData ( )
 {
 	if ( GetBodySetup ( ) )
 	{
-		GetBodySetup ( )->InvalidatePhysicsData ( );
+		MeshBodySetup->AbortPhysicsMeshAsyncCreation ( );
 
-		bIsBodyInvalid = true;
+		MeshBodySetup->RemoveSimpleCollision ( );
+		DestroyPhysicsState ( );
 
 		if ( FBaseDynamicMeshSceneProxy* Proxy = GetBaseSceneProxy ( ) )
 		{
@@ -269,19 +270,22 @@ void ULPPChunkedDynamicMesh::RebuildPhysicsData ( )
 
 	if ( MeshBodySetup->CurrentCookHelper )
 	{
-		bIsBodyInvalid = true;
+		MeshBodySetup->AbortPhysicsMeshAsyncCreation ( );
 	}
-	else if ( GetMesh ( )->TriangleCount ( ) > 0 )
+	
+	if ( GetMesh ( )->TriangleCount ( ) > 0 )
 	{
-		MeshBodySetup->RemoveSimpleCollision ( );
-		MeshBodySetup->AddCollisionFrom ( this->AggGeom );
-
 		MeshBodySetup->CreatePhysicsMeshesAsync ( FOnAsyncPhysicsCookFinished::CreateUObject ( this , &ULPPChunkedDynamicMesh::FinishPhysicsAsyncCook , MeshBodySetup.Get ( ) ) );
 	}
-
-	if ( FBaseDynamicMeshSceneProxy* Proxy = GetBaseSceneProxy ( ) )
+	else
 	{
-		Proxy->SetCollisionData ( );
+		MeshBodySetup->RemoveSimpleCollision ( );
+		DestroyPhysicsState ( );
+
+		if ( FBaseDynamicMeshSceneProxy* Proxy = GetBaseSceneProxy ( ) )
+		{
+			Proxy->SetCollisionData ( );
+		}
 	}
 }
 
@@ -289,14 +293,14 @@ void ULPPChunkedDynamicMesh::FinishPhysicsAsyncCook ( bool bSuccess , UBodySetup
 {
 	if ( bSuccess )
 	{
+		MeshBodySetup->AggGeom = AggGeom;
+
 		RecreatePhysicsState ( );
-	}
 
-	if ( bIsBodyInvalid )
-	{
-		bIsBodyInvalid = false;
-
-		RebuildPhysicsData ( );
+		if ( FBaseDynamicMeshSceneProxy* Proxy = GetBaseSceneProxy ( ) )
+		{
+			Proxy->SetCollisionData ( );
+		}
 	}
 }
 

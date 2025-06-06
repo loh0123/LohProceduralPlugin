@@ -60,9 +60,6 @@ protected:
 	UPROPERTY ( Transient )
 	TObjectPtr < UBodySetup > MeshBodySetup;
 
-	UPROPERTY ( Transient )
-	bool bIsBodyInvalid = false;
-
 protected:
 
 	/** Current local-space bounding box of Mesh */
@@ -84,7 +81,7 @@ protected:
 
 	void InvalidatePhysicsData ( );
 	void RebuildPhysicsData ( );
-	void FinishPhysicsAsyncCook ( bool bSuccess, UBodySetup* FinishedBodySetup);
+	void FinishPhysicsAsyncCook ( bool bSuccess , UBodySetup* FinishedBodySetup );
 
 	virtual UBodySetup* CreateBodySetupHelper ( );
 
