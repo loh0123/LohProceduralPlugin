@@ -99,17 +99,19 @@ class LOHPROCEDURALPLUGIN_API ULPPGridDataLibrary : public UBlueprintFunctionLib
 {
 	GENERATED_BODY ( )
 
+public:
+
 	UFUNCTION ( BlueprintCallable , Category = "Default" )
 	static bool SetChunkConnectionMetaData ( ULFPGridTagDataComponent* DataComponent , const int32 RegionIndex , const int32 ChunkIndex , const FGameplayTag& BlockTag , const FGameplayTag& ConnectionMetaTag , const bool bDebug = false );
 
 	UFUNCTION ( BlueprintCallable , Category = "Default" )
-	static bool LineTraceChunkVisibleToPlayerIndex ( const ULFPGridTagDataComponent* DataComponent , const int32 PlayerRegionIndex , const int32 PlayerChunkIndex , const int32 RegionIndex , const int32 ChunkIndex , const FGameplayTag& ConnectionMetaTag );
+	static bool LineTraceChunkVisibleToCenterIndex ( const ULFPGridTagDataComponent* DataComponent , const int32 CenterRegionIndex , const int32 CenterChunkIndex , const int32 RegionIndex , const int32 ChunkIndex , const FGameplayTag& ConnectionMetaTag );
 
 	UFUNCTION ( BlueprintCallable , Category = "Default" )
 	static void IterateVisitableChunkList (
 		const ULFPGridTagDataComponent*     DataComponent ,
-		const int32                         PlayerRegionIndex ,
-		const int32                         PlayerChunkIndex ,
+		const int32                         CenterRegionIndex ,
+		const int32                         CenterChunkIndex ,
 		const FGameplayTag&                 ConnectionMetaTag ,
 		const uint8                         VisibleStepSize ,
 		const uint8                         MaxStepSize ,

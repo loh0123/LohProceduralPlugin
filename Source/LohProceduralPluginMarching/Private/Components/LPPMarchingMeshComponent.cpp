@@ -4,7 +4,6 @@
 
 #include "DynamicMeshEditor.h"
 #include "MeshCardBuild.h"
-#include "MeshSimplification.h"
 #include "Components/LFPGridTagDataComponent.h"
 #include "Components/LPPChunkedDynamicMeshProxy.h"
 #include "Data/LFPGridSetting.h"
@@ -173,7 +172,7 @@ void ULPPMarchingMeshComponent::ClearRender ( )
 	ClearMesh ( );
 }
 
-bool ULPPMarchingMeshComponent::UpdateRender ( const bool bSimplify )
+bool ULPPMarchingMeshComponent::UpdateRender ( )
 {
 	if ( IsDataComponentValid ( ) == false )
 	{
@@ -240,7 +239,6 @@ bool ULPPMarchingMeshComponent::UpdateRender ( const bool bSimplify )
 
 	PassData.MeshFullSize = GetMeshSize ( );
 	PassData.DataSize     = GetDataSize ( );
-	PassData.bSimplify    = bSimplify;
 	PassData.BoundExpand  = BoundExpand;
 	PassData.StartTime    = FDateTime::UtcNow ( );
 
@@ -259,37 +257,6 @@ bool ULPPMarchingMeshComponent::UpdateRender ( const bool bSimplify )
 
 	return true;
 }
-
-//void ULPPMarchingMeshComponent::SetDistanceFieldResolution ( const float NewResolutionScale , const bool bDeferUpdate )
-//{
-//	DistanceFieldResolutionScale = NewResolutionScale;
-//
-//	if ( bDeferUpdate == false )
-//	{
-//		UpdateDistanceField ( );
-//	}
-//}
-//
-//void ULPPMarchingMeshComponent::RebuildPhysicsData ( )
-//{
-//	if ( IsValid ( DataComponent ) == false )
-//	{
-//		Super::RebuildPhysicsData ( );
-//
-//		return;
-//	}
-//
-//	{
-//		FScopeLock Lock ( &ThreadDataLock );
-//
-//		if ( bOverrideBoxCollision && IsCollisionEnabled ( ) && CollisionType != CTF_UseComplexAsSimple && LocalThreadData.IsValid ( ) )
-//		{
-//			AggGeom.BoxElems = LocalThreadData->CollisionBoxElems;
-//		}
-//	}
-//
-//	Super::RebuildPhysicsData ( );
-//}
 
 void ULPPMarchingMeshComponent::UpdateDistanceField ( )
 {
@@ -607,15 +574,15 @@ TUniquePtr < FLFPMarchingThreadData > ULPPMarchingMeshComponent::ComputeNewMarch
 		Welder.OnlyUniquePairs      = false;
 		Welder.Apply ( );
 
-		if ( PassData.bSimplify )
-		{
-			UE::Geometry::FQEMSimplification Simplifier ( &MeshData );
-
-			constexpr float AngleThreshold = 0.001;
-
-			Simplifier.CollapseMode = UE::Geometry::FQEMSimplification::ESimplificationCollapseModes::MinimalQuadricPositionError;
-			Simplifier.SimplifyToMinimalPlanar ( AngleThreshold );
-		}
+		//if ( PassData.bSimplify )
+		//{
+		//	UE::Geometry::FQEMSimplification Simplifier ( &MeshData );
+		//
+		//	constexpr float AngleThreshold = 0.001;
+		//
+		//	Simplifier.CollapseMode = UE::Geometry::FQEMSimplification::ESimplificationCollapseModes::MinimalQuadricPositionError;
+		//	Simplifier.SimplifyToMinimalPlanar ( AngleThreshold );
+		//}
 
 		MeshData.RemoveUnusedVertices ( );
 		MeshData.CompactInPlace ( nullptr );

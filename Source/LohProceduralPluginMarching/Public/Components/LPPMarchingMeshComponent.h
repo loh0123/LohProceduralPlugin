@@ -58,7 +58,6 @@ public:
 
 	bool       bIsChunkFaceCullingDisable  = false;
 	bool       bIsRegionFaceCullingDisable = false;
-	bool       bSimplify                   = false;
 	FVector    MeshFullSize                = FVector ( );
 	FIntVector DataSize                    = FIntVector ( );
 	float      BoundExpand                 = 0.0f;
@@ -193,16 +192,7 @@ public:
 	void ClearRender ( );
 
 	UFUNCTION ( BlueprintCallable , Category = "LFPVoxelRender" )
-	bool UpdateRender ( const bool bSimplify = false );
-
-public:
-
-	//UFUNCTION ( BlueprintCallable , Category = "LFPVoxelRender" )
-	//void SetDistanceFieldResolution ( const float NewResolutionScale , const bool bDeferUpdate = false );
-
-protected:
-
-	//virtual void RebuildPhysicsData ( ) override;
+	bool UpdateRender ( );
 
 protected:
 
