@@ -18,6 +18,11 @@
       "Name": "LohProceduralPlugin",
       "Type": "Runtime",
       "LoadingPhase": "Default"
+    },
+    {
+      "Name": "LohProceduralPluginMarching",
+      "Type": "Runtime",
+      "LoadingPhase": "Default"
     }
   ],
   "Plugins": [

@@ -1,4 +1,7 @@
-﻿// Fill out your copyright notice in the Description page of Project Settings.
+﻿// Copyright (c) 2025 Loh Zhi Kang ( loh0123@hotmail.com )
+//
+// Distributed under the MIT License (MIT) (See accompanying file LICENSE.txt
+// or copy at http://opensource.org/licenses/MIT)
 
 #include "Components/LPPMarchingMeshComponent.h"
 
@@ -39,8 +42,6 @@ void ULPPMarchingMeshComponent::BeginPlay ( )
 void ULPPMarchingMeshComponent::EndPlay ( const EEndPlayReason::Type EndPlayReason )
 {
 	Super::EndPlay ( EndPlayReason );
-
-	ClearRender ( );
 }
 
 // Called every frame
@@ -425,7 +426,10 @@ FPrimitiveSceneProxy* ULPPMarchingMeshComponent::CreateSceneProxy ( )
 		{
 			FScopeLock Lock ( &ThreadDataLock );
 
-			NewDynamicProxy->SetLumenData ( LocalThreadData.Get ( )->LumenCardData , LocalThreadData.Get ( )->LumenBound );
+			if ( LocalThreadData.IsValid ( ) )
+			{
+				NewDynamicProxy->SetLumenData ( LocalThreadData.Get ( )->LumenCardData , LocalThreadData.Get ( )->LumenBound );
+			}
 		}
 	}
 

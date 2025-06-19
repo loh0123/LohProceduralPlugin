@@ -1,4 +1,7 @@
-﻿// Fill out your copyright notice in the Description page of Project Settings.
+﻿// Copyright (c) 2025 Loh Zhi Kang ( loh0123@hotmail.com )
+//
+// Distributed under the MIT License (MIT) (See accompanying file LICENSE.txt
+// or copy at http://opensource.org/licenses/MIT)
 
 
 #include "Components/LPPChunkManager.h"
@@ -295,11 +298,11 @@ void ULPPChunkManager::LoadChunkByNearbyPoint ( )
 	{
 		const FIntVector CurrentPlayerChunkPos = DataComponent->ToChunkGridPosition ( CurrentCenterChunkIndex );
 
-		for ( int32 OffsetZ = -1 ; OffsetZ < 1 ; ++OffsetZ )
+		for ( int32 OffsetZ = -NearbyDistance ; OffsetZ <= NearbyDistance ; ++OffsetZ )
 		{
-			for ( int32 OffsetY = -1 ; OffsetY < 1 ; ++OffsetY )
+			for ( int32 OffsetY = -NearbyDistance ; OffsetY <= NearbyDistance ; ++OffsetY )
 			{
-				for ( int32 OffsetX = -1 ; OffsetX < 1 ; ++OffsetX )
+				for ( int32 OffsetX = -NearbyDistance ; OffsetX <= NearbyDistance ; ++OffsetX )
 				{
 					const FIntVector LoadChunkPos   = FIntVector ( OffsetX , OffsetY , OffsetZ ) + CurrentPlayerChunkPos;
 					const FIntPoint  LoadChunkIndex = DataComponent->ToChunkGridIndex ( LoadChunkPos );

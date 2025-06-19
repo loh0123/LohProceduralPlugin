@@ -1,4 +1,7 @@
-﻿// Fill out your copyright notice in the Description page of Project Settings.
+﻿// Copyright (c) 2025 Loh Zhi Kang ( loh0123@hotmail.com )
+//
+// Distributed under the MIT License (MIT) (See accompanying file LICENSE.txt
+// or copy at http://opensource.org/licenses/MIT)
 
 
 #include "Components/LPPChunkedDynamicMesh.h"
@@ -25,7 +28,10 @@ void ULPPChunkedDynamicMesh::BeginPlay ( )
 {
 	Super::BeginPlay ( );
 
-	// ...
+	if ( IsValid ( MeshObject ) == false )
+	{
+		MeshObject = NewObject < UDynamicMesh > ( this , NAME_None , ( IsTemplate ( ) ? RF_Public | RF_ArchetypeObject : RF_NoFlags ) );
+	}
 }
 
 void ULPPChunkedDynamicMesh::EndPlay ( const EEndPlayReason::Type EndPlayReason )

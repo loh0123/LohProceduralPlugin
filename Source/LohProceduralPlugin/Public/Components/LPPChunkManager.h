@@ -1,4 +1,7 @@
-﻿// Fill out your copyright notice in the Description page of Project Settings.
+﻿// Copyright (c) 2025 Loh Zhi Kang ( loh0123@hotmail.com )
+//
+// Distributed under the MIT License (MIT) (See accompanying file LICENSE.txt
+// or copy at http://opensource.org/licenses/MIT)
 
 #pragma once
 
@@ -133,6 +136,9 @@ protected:
 
 	UPROPERTY ( EditAnywhere , Category = "Setting" )
 	uint8 VisibleWeight = 2;
+
+	UPROPERTY ( EditAnywhere , Category = "Setting" )
+	int32 NearbyDistance = 1;
 
 protected:
 
