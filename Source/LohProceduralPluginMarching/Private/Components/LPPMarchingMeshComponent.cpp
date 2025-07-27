@@ -127,6 +127,11 @@ uint8 ULPPMarchingMeshComponent::GetMarchingID ( const FIntVector& Offset ) cons
 
 void ULPPMarchingMeshComponent::Initialize ( ULFPChunkedTagDataComponent* NewDataComponent , ULFPChunkedIndexTranslator* NewIndexTranslator , const int32 NewRegionIndex , const int32 NewChunkIndex )
 {
+	if ( IsDataComponentValid ( ) )
+	{
+		Uninitialize ( );
+	}
+
 	DataComponent   = NewDataComponent;
 	IndexTranslator = NewIndexTranslator;
 	RegionIndex     = NewRegionIndex;

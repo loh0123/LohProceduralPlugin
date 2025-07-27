@@ -27,8 +27,6 @@ public:
 
 protected:
 
-	virtual void OnRegister ( ) override;
-
 	// Called when the game starts
 	virtual void BeginPlay ( ) override;
 
@@ -38,6 +36,19 @@ public:
 
 	// Called every frame
 	virtual void TickComponent ( float DeltaTime , ELevelTick TickType , FActorComponentTickFunction* ThisTickFunction ) override;
+
+public:
+
+	UFUNCTION ( BlueprintCallable , Category="Default" )
+	void Initialize ( ULFPChunkedTagDataComponent* NewDataComponent , ULFPChunkedIndexTranslator* NewIndexTranslator );
+
+	UFUNCTION ( BlueprintCallable , Category="Default" )
+	void Uninitialize ( );
+
+public:
+
+	UFUNCTION ( BlueprintPure , Category="Default" )
+	bool IsDataComponentValid ( ) const;
 
 public:
 
@@ -84,6 +95,9 @@ protected:
 
 	UFUNCTION ( )
 	void UnloadChunkByVisitList ( );
+
+	UFUNCTION ( )
+	void UnloadChunkList ( );
 
 protected:
 
@@ -132,7 +146,7 @@ protected:
 	TSubclassOf < AActor > ChunkActorClass = nullptr;
 
 	UPROPERTY ( EditAnywhere , Category = "Setting" )
-	TObjectPtr < ULFPChunkedIndexTranslator > ChunkIndexTranslator = nullptr;
+	TObjectPtr < ULFPChunkedIndexTranslator > IndexTranslator = nullptr;
 
 	UPROPERTY ( EditAnywhere , Category = "Setting" )
 	uint8 AsyncIterateAmount = 4;
