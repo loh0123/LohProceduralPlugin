@@ -6,9 +6,9 @@
 
 #include "Components/LPPChunkManager.h"
 
-#include "Components/LFPGridTagDataComponent.h"
+#include "Components/LFPChunkedTagDataComponent.h"
+#include  "Data/LFPChunkedIndexTranslator.h"
 #include "Components/LPPChunkController.h"
-#include "Data/LFPGridSetting.h"
 #include "Math/LFPGridLibrary.h"
 
 
@@ -26,7 +26,7 @@ void ULPPChunkManager::OnRegister ( )
 {
 	Super::OnRegister ( );
 
-	DataComponent = GetOwner ( )->FindComponentByClass < ULFPGridTagDataComponent > ( );
+	DataComponent = GetOwner ( )->FindComponentByClass < ULFPChunkedTagDataComponent > ( );
 }
 
 // Called when the game starts
@@ -71,7 +71,7 @@ void ULPPChunkManager::TickComponent ( float DeltaTime , ELevelTick TickType , F
 	{
 		for ( const FIntPoint& ChunkUpdateIndex : ChunkUpdateList )
 		{
-			ULPPGridDataLibrary::SetChunkConnectionMetaData ( DataComponent , ChunkUpdateIndex.X , ChunkUpdateIndex.Y , ConnectionBlockTag , ConnectionMetaTag , false );
+			ULPPGridDataLibrary::SetChunkConnectionMetaData ( DataComponent , ChunkIndexTranslator , ChunkUpdateIndex.X , ChunkUpdateIndex.Y , ConnectionBlockTag , ConnectionMetaTag , false );
 		}
 
 		ChunkUpdateList.Reset ( );
@@ -115,9 +115,14 @@ void ULPPChunkManager::TickComponent ( float DeltaTime , ELevelTick TickType , F
 	}
 }
 
-ULFPGridTagDataComponent* ULPPChunkManager::GetDataComponent ( ) const
+ULFPChunkedTagDataComponent* ULPPChunkManager::GetDataComponent ( ) const
 {
 	return DataComponent;
+}
+
+ULFPChunkedIndexTranslator* ULPPChunkManager::GetIndexTranslator ( ) const
+{
+	return ChunkIndexTranslator;
 }
 
 void ULPPChunkManager::LoadChunkIndex ( const int32 RegionIndex , const int32 ChunkIndex , const bool bLoadNearby , const bool bLoadVisitList )
@@ -149,12 +154,7 @@ void ULPPChunkManager::LoadChunkIndex ( const int32 RegionIndex , const int32 Ch
 
 void ULPPChunkManager::OnDataTagChanged ( const int32 RegionIndex , const int32 ChunkIndex , const int32 DataIndex , const FGameplayTag& OldTag , const FGameplayTag& NewTag )
 {
-	if ( IsValid ( ChunkDataSetting ) == false )
-	{
-		return;
-	}
-
-	if ( IsValid ( DataComponent ) == false )
+	if ( IsValid ( ChunkIndexTranslator ) == false )
 	{
 		return;
 	}
@@ -166,13 +166,13 @@ void ULPPChunkManager::OnDataTagChanged ( const int32 RegionIndex , const int32 
 	}
 
 	{
-		const FIntVector& DataGridSize = ChunkDataSetting->GetDataGridSize ( );
+		const FIntVector& DataGridSize = ChunkIndexTranslator->GetDataGridSize ( );
 
 		const FIntVector DataLocation = ULFPGridLibrary::ToGridLocation ( DataIndex , DataGridSize );
 
 		for ( const TArray < FIntVector > EdgeDirectionList = ULFPGridLibrary::GetGridEdgeDirection ( DataLocation , DataGridSize ) ; const auto& GridEdgeDirection : EdgeDirectionList )
 		{
-			const FIntVector& TargetIndex = DataComponent->ToDataGridIndex ( DataComponent->ToDataGridPosition ( FIntVector ( RegionIndex , ChunkIndex , DataIndex ) ) + GridEdgeDirection );
+			const FIntVector& TargetIndex = ChunkIndexTranslator->ToDataGridIndex ( ChunkIndexTranslator->ToDataGridPosition ( FIntVector ( RegionIndex , ChunkIndex , DataIndex ) ) + GridEdgeDirection );
 
 			if ( TargetIndex != FIntVector::NoneValue )
 			{
@@ -289,14 +289,14 @@ void ULPPChunkManager::MarkChunkUpdate ( const int32 RegionIndex , const int32 C
 
 void ULPPChunkManager::LoadChunkByNearbyPoint ( )
 {
-	if ( IsValid ( DataComponent ) == false )
+	if ( IsValid ( ChunkIndexTranslator ) == false )
 	{
 		return;
 	}
 
 	if ( CurrentCenterChunkIndex != FIntPoint::NoneValue )
 	{
-		const FIntVector CurrentPlayerChunkPos = DataComponent->ToChunkGridPosition ( CurrentCenterChunkIndex );
+		const FIntVector CurrentPlayerChunkPos = ChunkIndexTranslator->ToChunkGridPosition ( CurrentCenterChunkIndex );
 
 		for ( int32 OffsetZ = -NearbyDistance ; OffsetZ <= NearbyDistance ; ++OffsetZ )
 		{
@@ -305,7 +305,7 @@ void ULPPChunkManager::LoadChunkByNearbyPoint ( )
 				for ( int32 OffsetX = -NearbyDistance ; OffsetX <= NearbyDistance ; ++OffsetX )
 				{
 					const FIntVector LoadChunkPos   = FIntVector ( OffsetX , OffsetY , OffsetZ ) + CurrentPlayerChunkPos;
-					const FIntPoint  LoadChunkIndex = DataComponent->ToChunkGridIndex ( LoadChunkPos );
+					const FIntPoint  LoadChunkIndex = ChunkIndexTranslator->ToChunkGridIndex ( LoadChunkPos );
 
 					if ( LoadedChunkMap.Contains ( LoadChunkIndex ) )
 					{
@@ -347,7 +347,7 @@ void ULPPChunkManager::LoadChunkByVisitList ( )
 
 void ULPPChunkManager::UnloadChunkByDistance ( )
 {
-	if ( IsValid ( DataComponent ) == false )
+	if ( IsValid ( ChunkIndexTranslator ) == false )
 	{
 		return;
 	}
@@ -355,7 +355,7 @@ void ULPPChunkManager::UnloadChunkByDistance ( )
 	// Unload Old Chunk Base On Distance
 	if ( CurrentCenterChunkIndex != FIntPoint::NoneValue )
 	{
-		const FIntVector CurrentPlayerChunkPos = DataComponent->ToChunkGridPosition ( CurrentCenterChunkIndex );
+		const FIntVector CurrentPlayerChunkPos = ChunkIndexTranslator->ToChunkGridPosition ( CurrentCenterChunkIndex );
 
 		TArray < FIntPoint > UnloadList;
 
@@ -368,7 +368,7 @@ void ULPPChunkManager::UnloadChunkByDistance ( )
 				continue;
 			}
 
-			const FIntVector CurrentChunkPos = DataComponent->ToChunkGridPosition ( LoadedChunkData.Key );
+			const FIntVector CurrentChunkPos = ChunkIndexTranslator->ToChunkGridPosition ( LoadedChunkData.Key );
 
 			if ( const int32 DistanceToPlayer = ( CurrentChunkPos - CurrentPlayerChunkPos ).GetAbsMax ( ) ; DistanceToPlayer > MaxLODDistance )
 			{
@@ -394,7 +394,7 @@ void ULPPChunkManager::UnloadChunkByDistance ( )
 
 void ULPPChunkManager::UnloadChunkByVisitList ( )
 {
-	if ( IsValid ( DataComponent ) == false )
+	if ( IsValid ( ChunkIndexTranslator ) == false )
 	{
 		return;
 	}
@@ -408,7 +408,7 @@ void ULPPChunkManager::UnloadChunkByVisitList ( )
 
 		UnloadList.Reserve ( LoadedChunkMap.Num ( ) );
 
-		const FIntVector CurrentPlayerChunkPos = DataComponent->ToChunkGridPosition ( CurrentCenterChunkIndex );
+		const FIntVector CurrentPlayerChunkPos = ChunkIndexTranslator->ToChunkGridPosition ( CurrentCenterChunkIndex );
 
 		for ( const auto& LoadedChunkData : LoadedChunkMap )
 		{
@@ -417,7 +417,7 @@ void ULPPChunkManager::UnloadChunkByVisitList ( )
 				UnloadList.Add ( LoadedChunkData.Key );
 			}
 
-			const FIntVector CurrentChunkPos = DataComponent->ToChunkGridPosition ( LoadedChunkData.Key );
+			const FIntVector CurrentChunkPos = ChunkIndexTranslator->ToChunkGridPosition ( LoadedChunkData.Key );
 
 			if ( const int32 DistanceToPlayer = ( CurrentChunkPos - CurrentPlayerChunkPos ).GetAbsMax ( ) ; DistanceToPlayer > UnloadDistance && VisitedChunkList.Contains ( LoadedChunkData.Key ) == false )
 			{
@@ -455,6 +455,7 @@ void ULPPChunkManager::IterateVisitableChunkList ( )
 
 	ULPPGridDataLibrary::IterateVisitableChunkList (
 	                                                DataComponent ,
+	                                                ChunkIndexTranslator ,
 	                                                CurrentCenterChunkIndex.X ,
 	                                                CurrentCenterChunkIndex.Y ,
 	                                                ConnectionMetaTag ,
@@ -480,6 +481,7 @@ bool ULPPChunkManager::IsChunkVisibleToPlayer ( const int32 RegionIndex , const 
 
 	return ULPPGridDataLibrary::LineTraceChunkVisibleToCenterIndex (
 	                                                                DataComponent ,
+	                                                                ChunkIndexTranslator ,
 	                                                                CurrentCenterChunkIndex.X ,
 	                                                                CurrentCenterChunkIndex.Y ,
 	                                                                RegionIndex ,

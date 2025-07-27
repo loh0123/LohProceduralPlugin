@@ -6,7 +6,8 @@
 
 #include "Components/LPPChunkController.h"
 
-#include "Components/LFPGridTagDataComponent.h"
+#include "Components/LFPChunkedTagDataComponent.h"
+#include "Data/LFPChunkedIndexTranslator.h"
 #include "Components/LPPChunkManager.h"
 
 
@@ -88,7 +89,7 @@ void ULPPChunkController::SetChunkIndex ( const int32 NewRegionIndex , const int
 	RegionIndex = NewRegionIndex;
 	ChunkIndex  = NewChunkIndex;
 
-	OnChunkIndexChange.Broadcast ( RegionIndex , ChunkIndex , OwingManager->GetDataComponent ( )->ToChunkGridPosition ( FIntPoint ( RegionIndex , ChunkIndex ) ) );
+	OnChunkIndexChange.Broadcast ( RegionIndex , ChunkIndex , OwingManager->GetIndexTranslator ( )->ToChunkGridPosition ( FIntPoint ( RegionIndex , ChunkIndex ) ) );
 }
 
 ULPPChunkManager* ULPPChunkController::GetOwingManager ( ) const

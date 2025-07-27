@@ -10,6 +10,7 @@
 #include "LPPChunkController.generated.h"
 
 
+class ULPPChunkManager;
 DECLARE_DYNAMIC_MULTICAST_DELEGATE ( FLPPChunkController_DataChange );
 
 PRAGMA_DISABLE_DEPRECATION_WARNINGS // TODO : Remove this on next engine version ( Newer than 5.6 )

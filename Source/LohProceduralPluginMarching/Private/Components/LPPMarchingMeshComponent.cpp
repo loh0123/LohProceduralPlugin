@@ -9,7 +9,7 @@
 #include "MeshCardBuild.h"
 #include "Components/LFPGridTagDataComponent.h"
 #include "Components/LPPChunkedDynamicMeshProxy.h"
-#include "Data/LFPGridSetting.h"
+#include "Data/LFPChunkedIndexTranslator.h"
 #include "Data/LPPMarchingData.h"
 #include "DynamicMesh/DynamicMeshAABBTree3.h"
 #include "DynamicMesh/Operations/MergeCoincidentMeshEdges.h"
@@ -56,7 +56,7 @@ FIntVector ULPPMarchingMeshComponent::GetDataSize ( ) const
 {
 	if ( IsDataComponentValid ( ) )
 	{
-		const ULFPGridSetting* GridSetting = DataComponent->GetGridSetting ( );
+		const ULFPChunkedIndexTranslator* GridSetting = DataComponent->GetGridSetting ( );
 
 		FIntVector DataGridSize = GridSetting->GetDataGridSize ( );
 
@@ -90,19 +90,7 @@ FVector ULPPMarchingMeshComponent::GetMeshSize ( ) const
 
 bool ULPPMarchingMeshComponent::IsDataComponentValid ( ) const
 {
-	if ( IsValid ( DataComponent ) == false || IsValid ( RenderSetting ) == false )
-	{
-		return false;
-	}
-
-	const ULFPGridSetting* GridSetting = DataComponent->GetGridSetting ( );
-
-	if ( IsValid ( GridSetting ) == false )
-	{
-		return false;
-	}
-
-	return true;
+	return IsValid ( DataComponent ) && IsValid ( DataComponent->GetGridSetting ( ) ) && IsValid ( RenderSetting );
 }
 
 void ULPPMarchingMeshComponent::GetFaceCullingSetting ( bool& bIsChunkFaceCullingDisable , bool& bIsRegionFaceCullingDisable ) const
@@ -126,7 +114,7 @@ uint8 ULPPMarchingMeshComponent::GetMarchingID ( const FIntVector& Offset ) cons
 		for ( int32 MarchingIndex = 0 ; MarchingIndex < 8 ; ++MarchingIndex )
 		{
 			const FIntVector   MarchingOffset = ULFPGridLibrary::ToGridLocation ( MarchingIndex , FIntVector ( 2 ) );
-			const FIntVector   DataIndex      = DataComponent->AddOffsetToGridIndex ( FIntVector ( RegionIndex , ChunkIndex , 0 ) , Offset + MarchingOffset );
+			const FIntVector   DataIndex      = DataComponent->GetGridSetting ( )->AddOffsetToGridIndex ( FIntVector ( RegionIndex , ChunkIndex , 0 ) , Offset + MarchingOffset );
 			const FGameplayTag DataTag        = DataComponent->GetDataTag ( DataIndex.X , DataIndex.Y , DataIndex.Z );
 
 			if ( DataTag.MatchesTag ( HandleTag ) )
@@ -193,7 +181,7 @@ bool ULPPMarchingMeshComponent::UpdateRender ( )
 		for ( int32 SolidIndex = 0 ; SolidIndex < CacheDataIndex ; ++SolidIndex )
 		{
 			const FIntVector CheckOffset = ULFPGridLibrary::ToGridLocation ( SolidIndex , CacheDataSize ) - FIntVector ( 1 );
-			const FIntVector CheckIndex  = DataComponent->AddOffsetToGridIndex ( FIntVector ( RegionIndex , ChunkIndex , 0 ) , CheckOffset );
+			const FIntVector CheckIndex  = DataComponent->GetGridSetting ( )->AddOffsetToGridIndex ( FIntVector ( RegionIndex , ChunkIndex , 0 ) , CheckOffset );
 
 			if ( CheckIndex.GetMin ( ) == INDEX_NONE )
 			{
@@ -360,7 +348,7 @@ void ULPPMarchingMeshComponent::UpdateDistanceField ( )
 		for ( int32 DataIndex = 0 ; DataIndex < DataNum ; ++DataIndex )
 		{
 			const FIntVector VoxelPos       = ULFPGridLibrary::ToGridLocation ( DataIndex , DataSize );
-			const FIntVector VoxelDataIndex = DataComponent->AddOffsetToGridIndex ( FIntVector ( RegionIndex , ChunkIndex , 0 ) , VoxelPos );
+			const FIntVector VoxelDataIndex = DataComponent->GetGridSetting ( )->AddOffsetToGridIndex ( FIntVector ( RegionIndex , ChunkIndex , 0 ) , VoxelPos );
 
 			const FGameplayTag& SelfVoxelTag = DataComponent->GetDataTag ( VoxelDataIndex.X , VoxelDataIndex.Y , VoxelDataIndex.Z );
 
@@ -368,7 +356,7 @@ void ULPPMarchingMeshComponent::UpdateDistanceField ( )
 			{
 				for ( int32 FaceDirectionIndex = 0 ; FaceDirectionIndex < 6 ; ++FaceDirectionIndex )
 				{
-					const FIntVector& TargetIndex = DataComponent->AddOffsetToGridIndex ( VoxelDataIndex , LFPMarchingRenderConstantData::FaceDirection [ FaceDirectionIndex ].Up );
+					const FIntVector& TargetIndex = DataComponent->GetGridSetting ( )->AddOffsetToGridIndex ( VoxelDataIndex , LFPMarchingRenderConstantData::FaceDirection [ FaceDirectionIndex ].Up );
 
 					const bool bForceRender = ULFPGridLibrary::IsGridLocationValid ( VoxelPos + LFPMarchingRenderConstantData::FaceDirection [ FaceDirectionIndex ].Up , DataSize ) == false;
 
