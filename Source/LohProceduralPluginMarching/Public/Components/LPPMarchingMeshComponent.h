@@ -151,7 +151,10 @@ protected:
 protected:
 
 	UPROPERTY ( Transient )
-	TObjectPtr < class ULFPGridTagDataComponent > DataComponent = nullptr;
+	TObjectPtr < class ULFPChunkedTagDataComponent > DataComponent = nullptr;
+
+	UPROPERTY ( )
+	TObjectPtr < class ULFPChunkedIndexTranslator > IndexTranslator = nullptr;
 
 	UPROPERTY ( Transient )
 	int32 RegionIndex = INDEX_NONE;
@@ -184,7 +187,7 @@ protected:
 public:
 
 	UFUNCTION ( BlueprintCallable , Category="LFPVoxelRender" )
-	void Initialize ( class ULFPGridTagDataComponent* NewDataComponent , const int32 NewRegionIndex , const int32 NewChunkIndex );
+	void Initialize ( ULFPChunkedTagDataComponent* NewDataComponent , ULFPChunkedIndexTranslator* NewIndexTranslator , const int32 NewRegionIndex , const int32 NewChunkIndex );
 
 	UFUNCTION ( BlueprintCallable , Category="LFPVoxelRender" )
 	void Uninitialize ( );
