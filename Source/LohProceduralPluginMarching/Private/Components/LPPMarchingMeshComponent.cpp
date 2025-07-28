@@ -110,7 +110,7 @@ uint8 ULPPMarchingMeshComponent::GetMarchingID ( const FIntVector& Offset ) cons
 		for ( int32 MarchingIndex = 0 ; MarchingIndex < 8 ; ++MarchingIndex )
 		{
 			const FIntVector   MarchingOffset = ULFPGridLibrary::ToGridLocation ( MarchingIndex , FIntVector ( 2 ) );
-			const FIntVector   DataIndex      = IndexTranslator->AddOffsetToGridIndex ( FIntVector ( RegionIndex , ChunkIndex , 0 ) , Offset + MarchingOffset );
+			const FIntVector   DataIndex      = IndexTranslator->AddOffsetToDataGridIndex ( FIntVector ( RegionIndex , ChunkIndex , 0 ) , Offset + MarchingOffset );
 			const FGameplayTag DataTag        = DataComponent->GetDataTag ( DataIndex.X , DataIndex.Y , DataIndex.Z );
 
 			if ( DataTag.MatchesTag ( HandleTag ) )
@@ -183,7 +183,7 @@ bool ULPPMarchingMeshComponent::UpdateRender ( )
 		for ( int32 SolidIndex = 0 ; SolidIndex < CacheDataIndex ; ++SolidIndex )
 		{
 			const FIntVector CheckOffset = ULFPGridLibrary::ToGridLocation ( SolidIndex , CacheDataSize ) - FIntVector ( 1 );
-			const FIntVector CheckIndex  = IndexTranslator->AddOffsetToGridIndex ( FIntVector ( RegionIndex , ChunkIndex , 0 ) , CheckOffset );
+			const FIntVector CheckIndex  = IndexTranslator->AddOffsetToDataGridIndex ( FIntVector ( RegionIndex , ChunkIndex , 0 ) , CheckOffset );
 
 			if ( CheckIndex.GetMin ( ) == INDEX_NONE )
 			{
@@ -350,7 +350,7 @@ void ULPPMarchingMeshComponent::UpdateDistanceField ( )
 		for ( int32 DataIndex = 0 ; DataIndex < DataNum ; ++DataIndex )
 		{
 			const FIntVector VoxelPos       = ULFPGridLibrary::ToGridLocation ( DataIndex , DataSize );
-			const FIntVector VoxelDataIndex = IndexTranslator->AddOffsetToGridIndex ( FIntVector ( RegionIndex , ChunkIndex , 0 ) , VoxelPos );
+			const FIntVector VoxelDataIndex = IndexTranslator->AddOffsetToDataGridIndex ( FIntVector ( RegionIndex , ChunkIndex , 0 ) , VoxelPos );
 
 			const FGameplayTag& SelfVoxelTag = DataComponent->GetDataTag ( VoxelDataIndex.X , VoxelDataIndex.Y , VoxelDataIndex.Z );
 
@@ -358,7 +358,7 @@ void ULPPMarchingMeshComponent::UpdateDistanceField ( )
 			{
 				for ( int32 FaceDirectionIndex = 0 ; FaceDirectionIndex < 6 ; ++FaceDirectionIndex )
 				{
-					const FIntVector& TargetIndex = IndexTranslator->AddOffsetToGridIndex ( VoxelDataIndex , LFPMarchingRenderConstantData::FaceDirection [ FaceDirectionIndex ].Up );
+					const FIntVector& TargetIndex = IndexTranslator->AddOffsetToDataGridIndex ( VoxelDataIndex , LFPMarchingRenderConstantData::FaceDirection [ FaceDirectionIndex ].Up );
 
 					const bool bForceRender = ULFPGridLibrary::IsGridLocationValid ( VoxelPos + LFPMarchingRenderConstantData::FaceDirection [ FaceDirectionIndex ].Up , DataSize ) == false;
 

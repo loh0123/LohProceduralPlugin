@@ -183,7 +183,7 @@ void ULPPChunkManager::OnDataTagChanged ( const int32 RegionIndex , const int32 
 
 		for ( const TArray < FIntVector > EdgeDirectionList = ULFPGridLibrary::GetGridEdgeDirection ( DataLocation , DataGridSize ) ; const auto& GridEdgeDirection : EdgeDirectionList )
 		{
-			const FIntVector& TargetIndex = IndexTranslator->ToDataGridIndex ( IndexTranslator->ToDataGridPosition ( FIntVector ( RegionIndex , ChunkIndex , DataIndex ) ) + GridEdgeDirection );
+			const FIntVector TargetIndex = IndexTranslator->AddOffsetToDataGridIndex ( FIntVector ( RegionIndex , ChunkIndex , DataIndex ) , GridEdgeDirection );
 
 			if ( TargetIndex != FIntVector::NoneValue )
 			{
@@ -307,16 +307,13 @@ void ULPPChunkManager::LoadChunkByNearbyPoint ( )
 
 	if ( CurrentCenterChunkIndex != FIntPoint::NoneValue )
 	{
-		const FIntVector CurrentPlayerChunkPos = IndexTranslator->ToChunkGridPosition ( CurrentCenterChunkIndex );
-
 		for ( int32 OffsetZ = -NearbyDistance ; OffsetZ <= NearbyDistance ; ++OffsetZ )
 		{
 			for ( int32 OffsetY = -NearbyDistance ; OffsetY <= NearbyDistance ; ++OffsetY )
 			{
 				for ( int32 OffsetX = -NearbyDistance ; OffsetX <= NearbyDistance ; ++OffsetX )
 				{
-					const FIntVector LoadChunkPos   = FIntVector ( OffsetX , OffsetY , OffsetZ ) + CurrentPlayerChunkPos;
-					const FIntPoint  LoadChunkIndex = IndexTranslator->ToChunkGridIndex ( LoadChunkPos );
+					const FIntPoint LoadChunkIndex = IndexTranslator->AddOffsetToChunkGridIndex ( CurrentCenterChunkIndex , FIntVector ( OffsetX , OffsetY , OffsetZ ) );
 
 					if ( LoadedChunkMap.Contains ( LoadChunkIndex ) )
 					{
@@ -366,8 +363,6 @@ void ULPPChunkManager::UnloadChunkByDistance ( )
 	// Unload Old Chunk Base On Distance
 	if ( CurrentCenterChunkIndex != FIntPoint::NoneValue )
 	{
-		const FIntVector CurrentPlayerChunkPos = IndexTranslator->ToChunkGridPosition ( CurrentCenterChunkIndex );
-
 		TArray < FIntPoint > UnloadList;
 
 		for ( const auto& LoadedChunkData : LoadedChunkMap )
@@ -379,9 +374,10 @@ void ULPPChunkManager::UnloadChunkByDistance ( )
 				continue;
 			}
 
-			const FIntVector CurrentChunkPos = IndexTranslator->ToChunkGridPosition ( LoadedChunkData.Key );
-
-			if ( const int32 DistanceToPlayer = ( CurrentChunkPos - CurrentPlayerChunkPos ).GetAbsMax ( ) ; DistanceToPlayer > MaxLODDistance )
+			if (
+				const int32 DistanceToPlayer = IndexTranslator->GetDistanceToChunkGridIndex ( CurrentCenterChunkIndex , LoadedChunkData.Key ).GetAbsMax ( ) ;
+				DistanceToPlayer > MaxLODDistance
+			)
 			{
 				UnloadList.Add ( LoadedChunkData.Key );
 			}
@@ -419,8 +415,6 @@ void ULPPChunkManager::UnloadChunkByVisitList ( )
 
 		UnloadList.Reserve ( LoadedChunkMap.Num ( ) );
 
-		const FIntVector CurrentPlayerChunkPos = IndexTranslator->ToChunkGridPosition ( CurrentCenterChunkIndex );
-
 		for ( const auto& LoadedChunkData : LoadedChunkMap )
 		{
 			if ( IsValid ( LoadedChunkData.Value ) == false )
@@ -428,9 +422,10 @@ void ULPPChunkManager::UnloadChunkByVisitList ( )
 				UnloadList.Add ( LoadedChunkData.Key );
 			}
 
-			const FIntVector CurrentChunkPos = IndexTranslator->ToChunkGridPosition ( LoadedChunkData.Key );
-
-			if ( const int32 DistanceToPlayer = ( CurrentChunkPos - CurrentPlayerChunkPos ).GetAbsMax ( ) ; DistanceToPlayer > UnloadDistance && VisitedChunkList.Contains ( LoadedChunkData.Key ) == false )
+			if (
+				const int32 DistanceToPlayer = IndexTranslator->GetDistanceToChunkGridIndex ( CurrentCenterChunkIndex , LoadedChunkData.Key ).GetAbsMax ( ) ;
+				DistanceToPlayer > UnloadDistance && VisitedChunkList.Contains ( LoadedChunkData.Key ) == false
+			)
 			{
 				UnloadList.Add ( LoadedChunkData.Key );
 			}

@@ -76,7 +76,7 @@ void ULPPChunkController::ClearLODIndex ( )
 
 void ULPPChunkController::SetChunkIndex ( const int32 NewRegionIndex , const int32 NewChunkIndex )
 {
-	if ( IsValid ( OwingManager ) == false || IsValid ( OwingManager->GetDataComponent ( ) ) == false )
+	if ( IsValid ( OwingManager ) == false || OwingManager->IsDataComponentValid ( ) == false )
 	{
 		return;
 	}
@@ -89,7 +89,7 @@ void ULPPChunkController::SetChunkIndex ( const int32 NewRegionIndex , const int
 	RegionIndex = NewRegionIndex;
 	ChunkIndex  = NewChunkIndex;
 
-	OnChunkIndexChange.Broadcast ( RegionIndex , ChunkIndex , OwingManager->GetIndexTranslator ( )->ToChunkGridPosition ( FIntPoint ( RegionIndex , ChunkIndex ) ) );
+	OnChunkIndexChange.Broadcast ( RegionIndex , ChunkIndex );
 }
 
 ULPPChunkManager* ULPPChunkController::GetOwingManager ( ) const

@@ -13,10 +13,7 @@
 class ULPPChunkManager;
 DECLARE_DYNAMIC_MULTICAST_DELEGATE ( FLPPChunkController_DataChange );
 
-PRAGMA_DISABLE_DEPRECATION_WARNINGS // TODO : Remove this on next engine version ( Newer than 5.6 )
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams ( FLPPChunkController_IndexChange , const int32 , RegionIndex , const int32 , ChunkIndex , const FIntVector , GirdLocation );
-
-PRAGMA_ENABLE_DEPRECATION_WARNINGS
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams ( FLPPChunkController_IndexChange , const int32 , RegionIndex , const int32 , ChunkIndex );
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam ( FLPPChunkController_LODChange , const int32 , LODIndex );
 

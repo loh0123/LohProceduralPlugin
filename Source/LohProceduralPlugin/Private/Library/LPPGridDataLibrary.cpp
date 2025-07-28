@@ -151,12 +151,21 @@ bool ULPPGridDataLibrary::LineTraceChunkVisibleToCenterIndex ( const ULFPChunked
 		return false;
 	}
 
+	const FIntPoint CurrentChunkIndex = FIntPoint ( RegionIndex , ChunkIndex );
+	const FIntPoint TargetChunkIndex  = FIntPoint ( CenterRegionIndex , CenterChunkIndex );
+
 	TArray < FIntVector > TraceChunkPosList;
 	{
-		const FIntVector CurrentChunkPos = IndexTranslator->ToChunkGridPosition ( FIntPoint ( RegionIndex , ChunkIndex ) );
-		const FIntVector TargetChunkPos  = IndexTranslator->ToChunkGridPosition ( FIntPoint ( CenterRegionIndex , CenterChunkIndex ) );
+		//const FIntVector CurrentChunkPos = IndexTranslator->ToChunkGridPosition ( FIntPoint ( RegionIndex , ChunkIndex ) );
+		//const FIntVector TargetChunkPos  = IndexTranslator->ToChunkGridPosition ( FIntPoint ( CenterRegionIndex , CenterChunkIndex ) );
 
-		const FIntVector RayLine = TargetChunkPos - CurrentChunkPos;
+		const FIntVector TargetChunkPos = IndexTranslator->GetDistanceToChunkGridIndex (
+		                                                                                TargetChunkIndex ,
+		                                                                                CurrentChunkIndex ,
+		                                                                                false
+		                                                                               );
+
+		const FIntVector RayLine = TargetChunkPos; //TargetChunkPos - CurrentChunkPos;
 
 		// In which direction the ids are incremented.
 		const int32 StepX = ( RayLine.X >= 0 ) ? 1 : -1;
@@ -171,9 +180,9 @@ bool ULPPGridDataLibrary::LineTraceChunkVisibleToCenterIndex ( const ULFPChunked
 		const double TravelDeltaY = ( RayLine.Y != 0 ) ? FMath::Abs ( 1.0 / static_cast < double > ( RayLine.Y ) ) : DBL_MAX;
 		const double TravelDeltaZ = ( RayLine.Z != 0 ) ? FMath::Abs ( 1.0 / static_cast < double > ( RayLine.Z ) ) : DBL_MAX;
 
-		FIntVector IteratePos ( CurrentChunkPos );
+		FIntVector IteratePos ( 0 );
 
-		TraceChunkPosList.Add ( CurrentChunkPos );
+		TraceChunkPosList.Add ( IteratePos );
 
 		const int32 MaxTraceAmount = FMath::Abs ( RayLine.X ) + FMath::Abs ( RayLine.Y ) + FMath::Abs ( RayLine.Z );
 
@@ -219,8 +228,7 @@ bool ULPPGridDataLibrary::LineTraceChunkVisibleToCenterIndex ( const ULFPChunked
 
 	for ( int32 TraceIndex = 1 ; TraceIndex + 1 < TraceChunkPosList.Num ( ) ; ++TraceIndex )
 	{
-		const FIntVector& TracedChunkPos   = TraceChunkPosList [ TraceIndex ];
-		const FIntPoint   TracedChunkIndex = IndexTranslator->ToChunkGridIndex ( TracedChunkPos );
+		const FIntPoint TracedChunkIndex = IndexTranslator->AddOffsetToChunkGridIndex ( CurrentChunkIndex , TraceChunkPosList [ TraceIndex ] );
 
 		if ( TracedChunkIndex == FIntPoint::NoneValue )
 		{
@@ -302,7 +310,7 @@ void ULPPGridDataLibrary::IterateVisitableChunkList ( const ULFPChunkedTagDataCo
 			continue;
 		}
 
-		const FIntVector&      CurrentChunkPos         = IndexTranslator->ToChunkGridPosition ( FIntPoint ( VisitableChunk.RegionIndex , VisitableChunk.ChunkIndex ) );
+		const FIntPoint        CurrentChunkIndex       = FIntPoint ( VisitableChunk.RegionIndex , VisitableChunk.ChunkIndex );
 		const TArray < uint8 > ChunkConnectionDataList = DataComponent->GetChunkMeta ( VisitableChunk.RegionIndex , VisitableChunk.ChunkIndex , ConnectionMetaTag ).AsList ( );
 
 		// Data Not Calculate
@@ -334,8 +342,7 @@ void ULPPGridDataLibrary::IterateVisitableChunkList ( const ULFPChunkedTagDataCo
 				// Connection Is Open?
 				if ( ( ConnectionMask & ChunkConnectionMask ) == ConnectionMask )
 				{
-					const FIntVector CheckChunkPos   = CurrentChunkPos + NLPP_ChunkDataHelper::CheckDirectionList [ DirectionIndex ];
-					const FIntPoint  CheckChunkIndex = IndexTranslator->ToChunkGridIndex ( CheckChunkPos );
+					const FIntPoint CheckChunkIndex = IndexTranslator->AddOffsetToChunkGridIndex ( CurrentChunkIndex , NLPP_ChunkDataHelper::CheckDirectionList [ DirectionIndex ] );
 
 					// Is Chunk Index Valid
 					if ( CheckChunkIndex != FIntPoint::NoneValue )
@@ -367,8 +374,7 @@ void ULPPGridDataLibrary::IterateVisitableChunkList ( const ULFPChunkedTagDataCo
 			{
 				if ( ConnectionID & 1 << DirectionIndex )
 				{
-					const FIntVector CheckChunkPos   = CurrentChunkPos + NLPP_ChunkDataHelper::CheckDirectionList [ DirectionIndex ];
-					const FIntPoint  CheckChunkIndex = IndexTranslator->ToChunkGridIndex ( CheckChunkPos );
+					const FIntPoint CheckChunkIndex = IndexTranslator->AddOffsetToChunkGridIndex ( CurrentChunkIndex , NLPP_ChunkDataHelper::CheckDirectionList [ DirectionIndex ] );
 
 					// Is Chunk Index Valid
 					if ( CheckChunkIndex != FIntPoint::NoneValue )
