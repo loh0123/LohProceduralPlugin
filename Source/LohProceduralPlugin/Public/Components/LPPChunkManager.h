@@ -11,8 +11,7 @@
 #include "LPPChunkManager.generated.h"
 
 
-class ULFPChunkedTagDataComponent;
-class ULFPChunkedIndexTranslator;
+class ULFPGridTagDataComponent;
 class ULPPChunkController;
 
 UCLASS ( ClassGroup=(Custom) , meta=(BlueprintSpawnableComponent) )
@@ -40,7 +39,7 @@ public:
 public:
 
 	UFUNCTION ( BlueprintCallable , Category="Default" )
-	void Initialize ( ULFPChunkedTagDataComponent* NewDataComponent , ULFPChunkedIndexTranslator* NewIndexTranslator );
+	void Initialize ( ULFPGridTagDataComponent* NewDataComponent );
 
 	UFUNCTION ( BlueprintCallable , Category="Default" )
 	void Uninitialize ( );
@@ -130,7 +129,7 @@ protected:
 	TArray < TObjectPtr < ULPPChunkController > > AvailableChunkList = TArray < TObjectPtr < ULPPChunkController > > ( );
 
 	UPROPERTY ( Transient )
-	TObjectPtr < ULFPChunkedTagDataComponent > DataComponent = nullptr;
+	TObjectPtr < ULFPGridTagDataComponent > DataComponent = nullptr;
 
 protected:
 
@@ -144,9 +143,6 @@ protected:
 
 	UPROPERTY ( EditAnywhere , Category = "Setting" )
 	TSubclassOf < AActor > ChunkActorClass = nullptr;
-
-	UPROPERTY ( EditAnywhere , Category = "Setting" )
-	TObjectPtr < ULFPChunkedIndexTranslator > IndexTranslator = nullptr;
 
 	UPROPERTY ( EditAnywhere , Category = "Setting" )
 	uint8 AsyncIterateAmount = 4;
