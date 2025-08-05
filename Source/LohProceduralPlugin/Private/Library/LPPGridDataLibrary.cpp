@@ -3,18 +3,12 @@
 
 #include "Library/LPPGridDataLibrary.h"
 
-#include "Components/LFPChunkedTagDataComponent.h"
-#include "Data/LFPChunkedIndexTranslator.h"
+#include "Components/LFPGridTagDataComponent.h"
 #include "Math/LFPGridLibrary.h"
 
-bool ULPPGridDataLibrary::SetChunkConnectionMetaData ( ULFPChunkedTagDataComponent* DataComponent , const ULFPChunkedIndexTranslator* IndexTranslator , const int32 RegionIndex , const int32 ChunkIndex , const FGameplayTag& BlockTag , const FGameplayTag& ConnectionMetaTag , const bool bDebug )
+bool ULPPGridDataLibrary::SetChunkConnectionMetaData ( ULFPGridTagDataComponent* DataComponent , const int32 RegionIndex , const int32 ChunkIndex , const FGameplayTag& BlockTag , const FGameplayTag& ConnectionMetaTag , const bool bDebug )
 {
 	if ( IsValid ( DataComponent ) == false )
-	{
-		return false;
-	}
-
-	if ( IsValid ( IndexTranslator ) == false )
 	{
 		return false;
 	}
@@ -88,11 +82,11 @@ bool ULPPGridDataLibrary::SetChunkConnectionMetaData ( ULFPChunkedTagDataCompone
 
 			for ( const int32 CurrentDataIndex : CurrentList )
 			{
-				const FIntVector CurrentLocalDataPos = ULFPGridLibrary::ToGridLocation ( CurrentDataIndex , IndexTranslator->GetDataGridSize ( ) );
+				const FIntVector CurrentLocalDataPos = ULFPGridLibrary::ToGridLocation ( CurrentDataIndex , DataComponent->GetDataGridSize ( ) );
 
 				for ( int32 CheckIndex = 0 ; CheckIndex < 6 ; ++CheckIndex )
 				{
-					const int32 CheckDataIndex = ULFPGridLibrary::ToGridIndex ( CurrentLocalDataPos + NLPP_ChunkDataHelper::CheckDirectionList [ CheckIndex ] , IndexTranslator->GetDataGridSize ( ) );
+					const int32 CheckDataIndex = ULFPGridLibrary::ToGridIndex ( CurrentLocalDataPos + NLPP_ChunkDataHelper::CheckDirectionList [ CheckIndex ] , DataComponent->GetDataGridSize ( ) );
 
 					if ( CheckDataIndex == INDEX_NONE )
 					{
@@ -139,14 +133,9 @@ bool ULPPGridDataLibrary::SetChunkConnectionMetaData ( ULFPChunkedTagDataCompone
 	return true;
 }
 
-bool ULPPGridDataLibrary::LineTraceChunkVisibleToCenterIndex ( const ULFPChunkedTagDataComponent* DataComponent , const ULFPChunkedIndexTranslator* IndexTranslator , const int32 CenterRegionIndex , const int32 CenterChunkIndex , const int32 RegionIndex , const int32 ChunkIndex , const FGameplayTag& ConnectionMetaTag )
+bool ULPPGridDataLibrary::LineTraceChunkVisibleToCenterIndex ( const ULFPGridTagDataComponent* DataComponent , const int32 CenterRegionIndex , const int32 CenterChunkIndex , const int32 RegionIndex , const int32 ChunkIndex , const FGameplayTag& ConnectionMetaTag )
 {
 	if ( IsValid ( DataComponent ) == false )
-	{
-		return false;
-	}
-
-	if ( IsValid ( IndexTranslator ) == false )
 	{
 		return false;
 	}
@@ -159,11 +148,11 @@ bool ULPPGridDataLibrary::LineTraceChunkVisibleToCenterIndex ( const ULFPChunked
 		//const FIntVector CurrentChunkPos = IndexTranslator->ToChunkGridPosition ( FIntPoint ( RegionIndex , ChunkIndex ) );
 		//const FIntVector TargetChunkPos  = IndexTranslator->ToChunkGridPosition ( FIntPoint ( CenterRegionIndex , CenterChunkIndex ) );
 
-		const FIntVector TargetChunkPos = IndexTranslator->GetDistanceToChunkGridIndex (
-		                                                                                TargetChunkIndex ,
-		                                                                                CurrentChunkIndex ,
-		                                                                                false
-		                                                                               );
+		const FIntVector TargetChunkPos = DataComponent->GetDistanceToChunkGridIndex (
+		                                                                              TargetChunkIndex ,
+		                                                                              CurrentChunkIndex ,
+		                                                                              false
+		                                                                             );
 
 		const FIntVector RayLine = TargetChunkPos; //TargetChunkPos - CurrentChunkPos;
 
@@ -228,7 +217,7 @@ bool ULPPGridDataLibrary::LineTraceChunkVisibleToCenterIndex ( const ULFPChunked
 
 	for ( int32 TraceIndex = 1 ; TraceIndex + 1 < TraceChunkPosList.Num ( ) ; ++TraceIndex )
 	{
-		const FIntPoint TracedChunkIndex = IndexTranslator->AddOffsetToChunkGridIndex ( CurrentChunkIndex , TraceChunkPosList [ TraceIndex ] );
+		const FIntPoint TracedChunkIndex = DataComponent->AddOffsetToChunkGridIndex ( CurrentChunkIndex , TraceChunkPosList [ TraceIndex ] );
 
 		if ( TracedChunkIndex == FIntPoint::NoneValue )
 		{
@@ -262,14 +251,9 @@ bool ULPPGridDataLibrary::LineTraceChunkVisibleToCenterIndex ( const ULFPChunked
 	return true;
 }
 
-void ULPPGridDataLibrary::IterateVisitableChunkList ( const ULFPChunkedTagDataComponent* DataComponent , const ULFPChunkedIndexTranslator* IndexTranslator , const int32 CenterRegionIndex , const int32 CenterChunkIndex , const FGameplayTag& ConnectionMetaTag , const uint8 VisibleStepSize , const uint8 MaxStepSize , const uint8 LineTraceStep , TMap < FIntPoint , int32 >& VisitedChunkList , TArray < FLPP_VisitableChunkData >& NextVisitableChunkList )
+void ULPPGridDataLibrary::IterateVisitableChunkList ( const ULFPGridTagDataComponent* DataComponent , const int32 CenterRegionIndex , const int32 CenterChunkIndex , const FGameplayTag& ConnectionMetaTag , const uint8 VisibleStepSize , const uint8 MaxStepSize , const uint8 LineTraceStep , TMap < FIntPoint , int32 >& VisitedChunkList , TArray < FLPP_VisitableChunkData >& NextVisitableChunkList )
 {
 	if ( IsValid ( DataComponent ) == false )
-	{
-		return;
-	}
-
-	if ( IsValid ( IndexTranslator ) == false )
 	{
 		return;
 	}
@@ -299,7 +283,7 @@ void ULPPGridDataLibrary::IterateVisitableChunkList ( const ULFPChunkedTagDataCo
 		int32 NextVisibleStep = VisitableChunk.VisibleStep;
 
 		// Chunk Is Not Visible To Player?
-		if ( VisitableChunk.Step >= LineTraceStep && LineTraceChunkVisibleToCenterIndex ( DataComponent , IndexTranslator , CenterRegionIndex , CenterChunkIndex , VisitableChunk.RegionIndex , VisitableChunk.ChunkIndex , ConnectionMetaTag ) == false )
+		if ( VisitableChunk.Step >= LineTraceStep && LineTraceChunkVisibleToCenterIndex ( DataComponent , CenterRegionIndex , CenterChunkIndex , VisitableChunk.RegionIndex , VisitableChunk.ChunkIndex , ConnectionMetaTag ) == false )
 		{
 			NextVisibleStep += VisibleStepSize;
 		}
@@ -342,7 +326,7 @@ void ULPPGridDataLibrary::IterateVisitableChunkList ( const ULFPChunkedTagDataCo
 				// Connection Is Open?
 				if ( ( ConnectionMask & ChunkConnectionMask ) == ConnectionMask )
 				{
-					const FIntPoint CheckChunkIndex = IndexTranslator->AddOffsetToChunkGridIndex ( CurrentChunkIndex , NLPP_ChunkDataHelper::CheckDirectionList [ DirectionIndex ] );
+					const FIntPoint CheckChunkIndex = DataComponent->AddOffsetToChunkGridIndex ( CurrentChunkIndex , NLPP_ChunkDataHelper::CheckDirectionList [ DirectionIndex ] );
 
 					// Is Chunk Index Valid
 					if ( CheckChunkIndex != FIntPoint::NoneValue )
@@ -374,7 +358,7 @@ void ULPPGridDataLibrary::IterateVisitableChunkList ( const ULFPChunkedTagDataCo
 			{
 				if ( ConnectionID & 1 << DirectionIndex )
 				{
-					const FIntPoint CheckChunkIndex = IndexTranslator->AddOffsetToChunkGridIndex ( CurrentChunkIndex , NLPP_ChunkDataHelper::CheckDirectionList [ DirectionIndex ] );
+					const FIntPoint CheckChunkIndex = DataComponent->AddOffsetToChunkGridIndex ( CurrentChunkIndex , NLPP_ChunkDataHelper::CheckDirectionList [ DirectionIndex ] );
 
 					// Is Chunk Index Valid
 					if ( CheckChunkIndex != FIntPoint::NoneValue )

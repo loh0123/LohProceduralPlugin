@@ -52,10 +52,7 @@ public:
 public:
 
 	UFUNCTION ( BlueprintPure , Category = "Default" )
-	ULFPChunkedTagDataComponent* GetDataComponent ( ) const;
-
-	UFUNCTION ( BlueprintPure , Category = "Default" )
-	ULFPChunkedIndexTranslator* GetIndexTranslator ( ) const;
+	ULFPGridTagDataComponent* GetDataComponent ( ) const;
 
 public:
 

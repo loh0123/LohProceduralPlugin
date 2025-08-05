@@ -6,8 +6,6 @@
 
 #include "Components/LPPChunkController.h"
 
-#include "Components/LFPChunkedTagDataComponent.h"
-#include "Data/LFPChunkedIndexTranslator.h"
 #include "Components/LPPChunkManager.h"
 
 
