@@ -292,8 +292,11 @@ void ULPPChunkedDynamicMesh::RebuildPhysicsData ( )
 	}
 	else
 	{
-		MeshBodySetup->RemoveSimpleCollision ( );
-		DestroyPhysicsState ( );
+		MeshBodySetup->ClearPhysicsMeshes ( );
+
+		MeshBodySetup->AggGeom = AggGeom;
+
+		RecreatePhysicsState ( );
 
 		if ( FBaseDynamicMeshSceneProxy* Proxy = GetBaseSceneProxy ( ) )
 		{
@@ -350,7 +353,7 @@ FPrimitiveSceneProxy* ULPPChunkedDynamicMesh::CreateSceneProxy ( )
 	ensure ( GetSceneProxy() == nullptr );
 
 	FLPPChunkedDynamicMeshProxy* NewProxy = nullptr;
-	if ( MeshObject && GetMesh ( )->TriangleCount ( ) > 0 )
+	if ( MeshObject )
 	{
 		NewProxy = new FLPPChunkedDynamicMeshProxy ( this );
 

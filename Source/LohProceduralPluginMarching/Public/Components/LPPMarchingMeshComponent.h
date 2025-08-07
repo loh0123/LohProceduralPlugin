@@ -59,6 +59,8 @@ struct FLFPMarchingPassData
 
 public:
 
+	bool       bNeedRenderData             = false;
+	bool       bNeedSimpleCollisionData    = false;
 	bool       bIsChunkFaceCullingDisable  = false;
 	bool       bIsRegionFaceCullingDisable = false;
 	FVector    MeshFullSize                = FVector ( );
@@ -147,6 +149,12 @@ protected:
 
 	UPROPERTY ( EditDefaultsOnly , Category="Setting" )
 	bool bGenerateDistanceField = false;
+
+	UPROPERTY ( EditDefaultsOnly , Category="Setting" )
+	bool bNeedRenderData = false;
+
+	UPROPERTY ( EditDefaultsOnly , Category="Setting" )
+	bool bNeedSimpleCollisionData = false;
 
 protected:
 

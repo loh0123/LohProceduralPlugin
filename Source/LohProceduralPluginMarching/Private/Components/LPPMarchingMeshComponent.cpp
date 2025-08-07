@@ -227,10 +227,12 @@ bool ULPPMarchingMeshComponent::UpdateRender ( )
 
 	GetFaceCullingSetting ( PassData.bIsChunkFaceCullingDisable , PassData.bIsRegionFaceCullingDisable );
 
-	PassData.MeshFullSize = GetMeshSize ( );
-	PassData.DataSize     = GetDataSize ( );
-	PassData.BoundExpand  = BoundExpand;
-	PassData.StartTime    = FDateTime::UtcNow ( );
+	PassData.bNeedRenderData          = bNeedRenderData;
+	PassData.bNeedSimpleCollisionData = bNeedSimpleCollisionData;
+	PassData.MeshFullSize             = GetMeshSize ( );
+	PassData.DataSize                 = GetDataSize ( );
+	PassData.BoundExpand              = BoundExpand;
+	PassData.StartTime                = FDateTime::UtcNow ( );
 
 	PassData.RenderSetting = RenderSetting;
 
@@ -485,6 +487,7 @@ TUniquePtr < FLFPMarchingThreadData > ULPPMarchingMeshComponent::ComputeNewMarch
 	}
 
 	// Mesh Data
+	if ( PassData.bNeedRenderData )
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE ( MarchingMesh_GeneratingMesh );
 
@@ -587,6 +590,7 @@ TUniquePtr < FLFPMarchingThreadData > ULPPMarchingMeshComponent::ComputeNewMarch
 	}
 
 	// Lumen Card
+	if ( PassData.bNeedRenderData )
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE ( MarchingMesh_GeneratingLumen );
 
@@ -784,6 +788,7 @@ TUniquePtr < FLFPMarchingThreadData > ULPPMarchingMeshComponent::ComputeNewMarch
 	}
 
 	// Collision Box
+	if ( PassData.bNeedSimpleCollisionData )
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE ( MarchingMesh_GeneratingBoxCollision );
 
@@ -950,13 +955,11 @@ void ULPPMarchingMeshComponent::ComputeNewMarchingMesh_Completed ( TUniquePtr < 
 
 					//UE_LOG ( LogTemp , Warning , TEXT("Marching Data : %s") , *LocalThreadData->MeshData.MeshInfoString ( ) );
 
+					AggGeom.BoxElems = LocalThreadData->CollisionBoxElems;
+
 					SetMesh ( MoveTemp ( LocalThreadData->MeshData ) );
 
 					LocalThreadData->MeshData.Clear ( );
-
-					AggGeom.BoxElems = LocalThreadData->CollisionBoxElems;
-
-					RebuildPhysicsData ( );
 
 					//UE_LOG ( LogTemp , Warning , TEXT("Marching Data Time Use : %d ms : Compact %f") , (int32)(FDateTime::UtcNow() - LocalThreadData->StartTime).GetTotalMilliseconds() , CompactMetric );
 
