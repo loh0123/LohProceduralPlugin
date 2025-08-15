@@ -7,12 +7,14 @@
 
 #include "DynamicMeshEditor.h"
 #include "MeshCardBuild.h"
+#include "MeshSimplification.h"
 #include "Components/LFPChunkedTagDataComponent.h"
 #include "Components/LFPGridTagDataComponent.h"
 #include "Components/LPPChunkedDynamicMeshProxy.h"
 #include "Data/LPPMarchingData.h"
 #include "DynamicMesh/DynamicMeshAABBTree3.h"
 #include "DynamicMesh/Operations/MergeCoincidentMeshEdges.h"
+#include "Generators/MinimalBoxMeshGenerator.h"
 #include "Library/LPPMarchingFunctionLibrary.h"
 #include "Math/LFPGridLibrary.h"
 #include "Operations/MeshPlaneCut.h"
@@ -86,7 +88,7 @@ FVector ULPPMarchingMeshComponent::GetMeshSize ( ) const
 
 bool ULPPMarchingMeshComponent::IsDataComponentValid ( ) const
 {
-	return IsValid ( DataComponent ) && IsValid ( RenderSetting ) && RegionIndex > INDEX_NONE && ChunkIndex > INDEX_NONE;
+	return IsValid ( GetWorld ( ) ) && IsValid ( DataComponent ) && IsValid ( RenderSetting ) && RegionIndex > INDEX_NONE && ChunkIndex > INDEX_NONE;
 }
 
 void ULPPMarchingMeshComponent::GetFaceCullingSetting ( bool& bIsChunkFaceCullingDisable , bool& bIsRegionFaceCullingDisable ) const
@@ -227,8 +229,9 @@ bool ULPPMarchingMeshComponent::UpdateRender ( )
 
 	GetFaceCullingSetting ( PassData.bIsChunkFaceCullingDisable , PassData.bIsRegionFaceCullingDisable );
 
-	PassData.bNeedRenderData          = bNeedRenderData;
-	PassData.bNeedSimpleCollisionData = bNeedSimpleCollisionData;
+	PassData.bNeedRenderData          = bGenerateRenderData;
+	PassData.bNeedSimpleRenderData    = bSimplifyRenderData;
+	PassData.bNeedSimpleCollisionData = bGenerateSimpleBoxCollisionData;
 	PassData.MeshFullSize             = GetMeshSize ( );
 	PassData.DataSize                 = GetDataSize ( );
 	PassData.BoundExpand              = BoundExpand;
@@ -250,7 +253,7 @@ bool ULPPMarchingMeshComponent::UpdateRender ( )
 	return true;
 }
 
-void ULPPMarchingMeshComponent::UpdateDistanceField ( )
+void ULPPMarchingMeshComponent::UpdateDistanceField ( const FDynamicMesh3& ReadMesh )
 {
 	if ( bGenerateDistanceField == false )
 	{
@@ -260,7 +263,7 @@ void ULPPMarchingMeshComponent::UpdateDistanceField ( )
 	{
 		FScopeLock Lock ( &ThreadDataLock );
 
-		if ( DistanceFieldResolutionScale <= 0.0f || LocalThreadData.IsValid ( ) == false || IsDataComponentValid ( ) == false || GetDynamicMesh ( )->IsEmpty ( ) )
+		if ( DistanceFieldResolutionScale <= 0.0f || LocalThreadData.IsValid ( ) == false || IsDataComponentValid ( ) == false || MeshCompactData.Position.IsEmpty ( ) )
 		{
 			DistanceFieldComputeData.CancelJob ( );
 
@@ -274,34 +277,9 @@ void ULPPMarchingMeshComponent::UpdateDistanceField ( )
 	FDynamicMesh3 GeoOnlyCopy;
 
 	// Compute whether the mesh uses mainly two-sided materials before, as this is the only info the distance field compute needs from the mesh attributes
-	bool bMostlyTwoSided = false;
+	bool bMostlyTwoSided = IsValid ( GetMaterial ( 0 ) ) ? GetMaterial ( 0 )->IsTwoSided ( ) : false;
 
-	ProcessMesh ( [&] ( const FDynamicMesh3& ReadMesh )
-	{
-		if ( ReadMesh.Attributes ( ) && ReadMesh.Attributes ( )->GetMaterialID ( ) && bMostlyTwoSided == false )
-		{
-			TArray < bool > MatIsTwoSided;
-			MatIsTwoSided.SetNumUninitialized ( BaseMaterials.Num ( ) );
-			for ( int32 Idx = 0 ; Idx < BaseMaterials.Num ( ) ; ++Idx )
-			{
-				MatIsTwoSided [ Idx ] = BaseMaterials [ Idx ]
-				                        ? BaseMaterials [ Idx ]->IsTwoSided ( )
-				                        : false;
-			}
-			const UE::Geometry::FDynamicMeshMaterialAttribute* Materials        = ReadMesh.Attributes ( )->GetMaterialID ( );
-			int32                                              TwoSidedTriCount = 0;
-			for ( int32 TID : ReadMesh.TriangleIndicesItr ( ) )
-			{
-				int32 MID = Materials->GetValue ( TID );
-				TwoSidedTriCount += MatIsTwoSided.IsValidIndex ( MID )
-				                    ? static_cast < int32 > ( MatIsTwoSided [ MID ] )
-				                    : 0;
-			}
-			bMostlyTwoSided = TwoSidedTriCount * 2 >= ReadMesh.TriangleCount ( );
-		}
-
-		GeoOnlyCopy.Copy ( ReadMesh , false , false , false , false );
-	} );
+	GeoOnlyCopy.Copy ( ReadMesh , false , false , false , false );
 
 
 	// Fill Mesh Hole
@@ -427,11 +405,11 @@ FPrimitiveSceneProxy* ULPPMarchingMeshComponent::CreateSceneProxy ( )
 	return NewProxy;
 }
 
-void ULPPMarchingMeshComponent::NotifyMeshUpdated ( )
+void ULPPMarchingMeshComponent::NotifyMeshUpdated ( const FDynamicMesh3& MeshData )
 {
-	Super::NotifyMeshUpdated ( );
+	Super::NotifyMeshUpdated ( MeshData );
 
-	UpdateDistanceField ( );
+	UpdateDistanceField ( MeshData );
 }
 
 TUniquePtr < FLFPMarchingThreadData > ULPPMarchingMeshComponent::ComputeNewMarchingMesh_TaskFunction ( FProgressCancel& Progress , const TBitArray < >& SolidList , const FLFPMarchingPassData& PassData )
@@ -497,7 +475,7 @@ TUniquePtr < FLFPMarchingThreadData > ULPPMarchingMeshComponent::ComputeNewMarch
 			MeshData.Attributes ( )->EnableTangents ( );
 		}
 
-		const TObjectPtr < ULPPMarchingData >& MeshAsset = PassData.RenderSetting;
+		bool bHasMesh = false;
 
 		TArray < uint8 > MarchingIDList;
 		{
@@ -508,77 +486,83 @@ TUniquePtr < FLFPMarchingThreadData > ULPPMarchingMeshComponent::ComputeNewMarch
 				const FIntVector CheckPos = ULFPGridLibrary::ToGridLocation ( MarchingIndex , MarchingSize );
 
 				MarchingIDList [ MarchingIndex ] = GetMarchingID ( CheckPos );
+
+				bHasMesh |= MarchingIDList [ MarchingIndex ] != 0 && MarchingIDList [ MarchingIndex ] != 255;
 			}
 		}
 
-		UE::Geometry::FDynamicMeshEditor Editor ( &MeshData );
-
-		/* Generate Marching Mesh Data */
-		for ( int32 MarchingIndex = 0 ; MarchingIndex < MarchingNum ; ++MarchingIndex )
+		if ( bHasMesh )
 		{
-			const FIntVector MarchingGridLocation = ULFPGridLibrary::ToGridLocation ( MarchingIndex , MarchingSize );
-			const FVector    MarchingMeshLocation = ( MeshGapSize * FVector ( MarchingGridLocation ) ) - MeshBoundHalfSize;
-			const uint8      MarchingID           = MarchingIDList [ MarchingIndex ];
+			const TObjectPtr < ULPPMarchingData >& MeshAsset = PassData.RenderSetting;
 
-			if ( Progress.Cancelled ( ) )
+			UE::Geometry::FDynamicMeshEditor Editor ( &MeshData );
+
+			/* Generate Marching Mesh Data */
+			for ( int32 MarchingIndex = 0 ; MarchingIndex < MarchingNum ; ++MarchingIndex )
 			{
-				return nullptr;
-			}
+				const FIntVector MarchingGridLocation = ULFPGridLibrary::ToGridLocation ( MarchingIndex , MarchingSize );
+				const FVector    MarchingMeshLocation = ( MeshGapSize * FVector ( MarchingGridLocation ) ) - MeshBoundHalfSize;
+				const uint8      MarchingID           = MarchingIDList [ MarchingIndex ];
 
-			if ( const FLFPMarchingMeshMappingDataV2& MeshMappingData = MeshAsset->GetMappingData ( MarchingID ) ; MeshMappingData.MeshID != INDEX_NONE )
-			{
-				const FDynamicMesh3* AppendMesh = MeshAsset->GetDynamicMesh ( MeshMappingData.MeshID );
-
-				if ( AppendMesh == nullptr )
+				if ( Progress.Cancelled ( ) )
 				{
-					continue;
+					return nullptr;
 				}
 
-				const FTransform AppendTransform (
-				                                  MeshMappingData.GetRotation ( ) ,
-				                                  MarchingMeshLocation ,
-				                                  FVector ( 1.0f )
-				                                 );
+				if ( const FLFPMarchingMeshMappingDataV2& MeshMappingData = MeshAsset->GetMappingData ( MarchingID ) ; MeshMappingData.MeshID != INDEX_NONE )
+				{
+					const FDynamicMesh3* AppendMesh = MeshAsset->GetDynamicMesh ( MeshMappingData.MeshID );
 
-				UE::Geometry::FTransformSRT3d    XForm ( AppendTransform );
-				UE::Geometry::FMeshIndexMappings TmpMappings;
-				Editor.AppendMesh ( AppendMesh , TmpMappings ,
-				                    [&XForm] ( const int32 VID , const FVector3d& Position ) { return XForm.TransformPosition ( Position ); } ,
-				                    [&XForm] ( const int32 NID , const FVector3d& Normal ) { return XForm.TransformNormal ( Normal ); } ,
-				                    XForm.GetDeterminant ( ) < 0 );
+					if ( AppendMesh == nullptr )
+					{
+						continue;
+					}
+
+					const FTransform AppendTransform (
+					                                  MeshMappingData.GetRotation ( ) ,
+					                                  MarchingMeshLocation ,
+					                                  FVector ( 1.0f )
+					                                 );
+
+					UE::Geometry::FTransformSRT3d    XForm ( AppendTransform );
+					UE::Geometry::FMeshIndexMappings TmpMappings;
+					Editor.AppendMesh ( AppendMesh , TmpMappings ,
+					                    [&XForm] ( const int32 VID , const FVector3d& Position ) { return XForm.TransformPosition ( Position ); } ,
+					                    [&XForm] ( const int32 NID , const FVector3d& Normal ) { return XForm.TransformNormal ( Normal ); } ,
+					                    XForm.GetDeterminant ( ) < 0 );
+				}
+			}
+
+			const FVector EdgeDirectionList [ 6 ] =
+			{
+				FVector ( 1 , 0 , 0 ) ,
+				FVector ( 0 , 1 , 0 ) ,
+				FVector ( 0 , 0 , 1 ) ,
+				FVector ( -1 , 0 , 0 ) ,
+				FVector ( 0 , -1 , 0 ) ,
+				FVector ( 0 , 0 , -1 )
+			};
+
+			for ( const FVector& EdgeDirection : EdgeDirectionList )
+			{
+				UE::Geometry::FMeshPlaneCut Cut ( &MeshData , EdgeDirection * MeshBoundHalfSize , EdgeDirection );
+				Cut.Cut ( );
+			}
+
+			UE::Geometry::FMergeCoincidentMeshEdges Welder ( &MeshData );
+			Welder.MergeVertexTolerance = 1.0f;
+			Welder.OnlyUniquePairs      = false;
+			Welder.Apply ( );
+
+			if ( PassData.bNeedSimpleRenderData )
+			{
+				UE::Geometry::FQEMSimplification Simplifier ( &MeshData );
+
+				constexpr float AngleThreshold = 0.001;
+
+				Simplifier.SimplifyToMinimalPlanar ( AngleThreshold );
 			}
 		}
-
-		const FVector EdgeDirectionList [ 6 ] =
-		{
-			FVector ( 1 , 0 , 0 ) ,
-			FVector ( 0 , 1 , 0 ) ,
-			FVector ( 0 , 0 , 1 ) ,
-			FVector ( -1 , 0 , 0 ) ,
-			FVector ( 0 , -1 , 0 ) ,
-			FVector ( 0 , 0 , -1 )
-		};
-
-		for ( const FVector& EdgeDirection : EdgeDirectionList )
-		{
-			UE::Geometry::FMeshPlaneCut Cut ( &MeshData , EdgeDirection * MeshBoundHalfSize , EdgeDirection );
-			Cut.Cut ( );
-		}
-
-		UE::Geometry::FMergeCoincidentMeshEdges Welder ( &MeshData );
-		Welder.MergeVertexTolerance = 1.0f;
-		Welder.OnlyUniquePairs      = false;
-		Welder.Apply ( );
-
-		//if ( PassData.bSimplify )
-		//{
-		//	UE::Geometry::FQEMSimplification Simplifier ( &MeshData );
-		//
-		//	constexpr float AngleThreshold = 0.001;
-		//
-		//	Simplifier.CollapseMode = UE::Geometry::FQEMSimplification::ESimplificationCollapseModes::MinimalQuadricPositionError;
-		//	Simplifier.SimplifyToMinimalPlanar ( AngleThreshold );
-		//}
 
 		MeshData.RemoveUnusedVertices ( );
 		MeshData.CompactInPlace ( nullptr );
@@ -993,7 +977,7 @@ TUniquePtr < FDistanceFieldVolumeData > ULPPMarchingMeshComponent::ComputeNewDis
 			return nullptr;
 		}
 
-		//const double StartTime = FPlatformTime::Seconds ( );
+		const double StartTime = FPlatformTime::Seconds ( );
 
 		const auto ComputeLinearMarchingIndex = [&] ( FIntVector MarchingCoordinate , FIntVector VolumeDimensions )
 		{
@@ -1312,17 +1296,18 @@ TUniquePtr < FDistanceFieldVolumeData > ULPPMarchingMeshComponent::ComputeNewDis
 		VolumeDataOut.StreamableMips.Unlock ( );
 		VolumeDataOut.StreamableMips.SetBulkDataFlags ( BULKDATA_Force_NOT_InlinePayload );
 
-		//const float BuildTime = static_cast < float > ( FPlatformTime::Seconds ( ) - StartTime );
+		const float BuildTime = static_cast < float > ( FPlatformTime::Seconds ( ) - StartTime );
 
-		//UE_LOG ( LogGeometry , Log , TEXT("DynamicMeshComponent - Finished distance field build in %.1fs - %ux%ux%u sparse distance field, %.1fMb total, %.1fMb always loaded, %u%% occupied, %u triangles") ,
-		//         BuildTime ,
-		//         Mip0IndirectionDimensions.X * DistanceField::UniqueDataBrickSize ,
-		//         Mip0IndirectionDimensions.Y * DistanceField::UniqueDataBrickSize ,
-		//         Mip0IndirectionDimensions.Z * DistanceField::UniqueDataBrickSize ,
-		//         (VolumeDataOut.GetResourceSizeBytes() + VolumeDataOut.StreamableMips.GetBulkDataSize()) / 1024.0f / 1024.0f ,
-		//         (VolumeDataOut.AlwaysLoadedMip.GetAllocatedSize()) / 1024.0f / 1024.0f ,
-		//         FMath::RoundToInt(100.0f * VolumeDataOut.Mips[0].NumDistanceFieldBricks / (float)(Mip0IndirectionDimensions.X * Mip0IndirectionDimensions.Y * Mip0IndirectionDimensions.Z)) ,
-		//         Mesh.TriangleCount() );
+		if ( BuildTime > 1.0f )
+			UE_LOG ( LogGeometry , Log , TEXT("DynamicMeshComponent - Finished distance field build in %.1fs - %ux%ux%u sparse distance field, %.1fMb total, %.1fMb always loaded, %u%% occupied, %u triangles") ,
+		         BuildTime ,
+		         Mip0IndirectionDimensions.X * DistanceField::UniqueDataBrickSize ,
+		         Mip0IndirectionDimensions.Y * DistanceField::UniqueDataBrickSize ,
+		         Mip0IndirectionDimensions.Z * DistanceField::UniqueDataBrickSize ,
+		         (VolumeDataOut.GetResourceSizeBytes() + VolumeDataOut.StreamableMips.GetBulkDataSize()) / 1024.0f / 1024.0f ,
+		         (VolumeDataOut.AlwaysLoadedMip.GetAllocatedSize()) / 1024.0f / 1024.0f ,
+		         FMath::RoundToInt(100.0f * VolumeDataOut.Mips[0].NumDistanceFieldBricks / (float)(Mip0IndirectionDimensions.X * Mip0IndirectionDimensions.Y * Mip0IndirectionDimensions.Z)) ,
+		         Mesh.TriangleCount() );
 
 		if ( Progress.Cancelled ( ) )
 		{

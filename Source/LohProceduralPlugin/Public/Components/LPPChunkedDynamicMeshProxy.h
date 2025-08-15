@@ -6,230 +6,221 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "LPPChunkedDynamicMesh.h"
 #include "MeshCardBuild.h"
 #include "RHICommandList.h"
+#include "RayTracingGeometry.h"
+#include "DistanceFieldAtlas.h"
+#include "Templates/PimplPtr.h"
+#include "PrimitiveViewRelevance.h"
 #include "Components/BaseDynamicMeshSceneProxy.h"
 
 /**
  * 
  */
-class FLPPChunkedDynamicMeshProxy final : public FBaseDynamicMeshSceneProxy
+class FLPPChunkedDynamicMeshProxy final : public FPrimitiveSceneProxy
 {
 	using FIndex2i = UE::Geometry::FIndex2i;
 	using FIndex3i = UE::Geometry::FIndex3i;
 
-private:
-
-	FMaterialRelevance MaterialRelevance;
-
-	// note: FBaseDynamicMeshSceneProxy owns and will destroy these
-	FMeshRenderBufferSet* RenderBufferSet;
-
 public:
 
-	/** Component that created this proxy (is there a way to look this up?) */
-	ULPPChunkedDynamicMesh* ParentComponent;
+	FLPPChunkedDynamicMeshProxy ( UMeshComponent* Component ) : FPrimitiveSceneProxy ( Component )
+	                                                            , bEnableRaytracing ( true )
+	                                                            , bPreferStaticDrawPath ( true )
+	                                                            , DistanceFieldData ( nullptr )
+	                                                            , MaterialRelevance ( Component->GetMaterialRelevance ( GetScene ( ).GetFeatureLevel ( ) ) )
+	                                                            , ParentComponent ( Component )
+	                                                            , CollisionTraceFlag ( )
+	{
+		SetCollisionData ( );
+
+		bOpaqueOrMasked = MaterialRelevance.bOpaque;
+
+		bVerifyUsedMaterials = true;
+
+		bHasDeformableMesh = false;
+		bStaticElementsAlwaysUseProxyPrimitiveUniformBuffer = true;
+		bSupportsSortedTriangles = true;
+	}
+
+	virtual ~FLPPChunkedDynamicMeshProxy ( ) override
+	{
+		for ( FMeshRenderBufferSet* BufferSet : AllocatedBufferSets )
+		{
+			FMeshRenderBufferSet::DestroyRenderBufferSet ( BufferSet );
+		}
+	}
+
+protected:
+
+	// Set of currently-allocated RenderBuffers. We own these pointers and must clean them up.
+	// Must guard access with AllocatedSetsLock!!
+	TArray < FMeshRenderBufferSet* > AllocatedBufferSets;
+
+	// use to control access to AllocatedBufferSets 
+	FCriticalSection AllocatedSetsLock;
+
+	// control raytracing support
+	bool bEnableRaytracing = false;
+
+	// whether to try to use the static draw instead of dynamic draw path; note we may still use the dynamic path if collision or vertex color rendering is enabled
+	bool bPreferStaticDrawPath = false;
+
+protected:
+
+	TPimplPtr < FCardRepresentationData > MeshCards;
+
+	bool bMeshCardsValid = false;
 
 protected:
 
 	TSharedPtr < FDistanceFieldVolumeData > DistanceFieldData;
 
+private:
+
+	FMaterialRelevance MaterialRelevance;
+
 public:
 
-	FLPPChunkedDynamicMeshProxy ( ULPPChunkedDynamicMesh* Component ) : FBaseDynamicMeshSceneProxy ( Component )
-	                                                                    , MaterialRelevance ( Component->GetMaterialRelevance ( GetScene ( ).GetFeatureLevel ( ) ) )
-	                                                                    , RenderBufferSet ( nullptr )
-	                                                                    , ParentComponent ( Component )
-	                                                                    , DistanceFieldData ( nullptr )
-	{
-	}
+	/** Component that created this proxy (is there a way to look this up?) */
+	UMeshComponent* ParentComponent;
 
+#if UE_ENABLE_DEBUG_DRAWING
 
-	virtual void GetActiveRenderBufferSets ( TArray < FMeshRenderBufferSet* >& Buffers ) const override
-	{
-		Buffers = { RenderBufferSet };
-	}
+private:
 
+	// If debug drawing is enabled, we store collision data here so that collision shapes can be rendered when requested by showflags
 
-	void Initialize ( )
-	{
-		// allocate buffer sets based on materials
-		ensure ( RenderBufferSet == nullptr );
-		RenderBufferSet           = AllocateNewRenderBufferSet ( );
-		RenderBufferSet->Material = ParentComponent->GetMaterial ( 0 );
+	bool bOwnerIsNull = true;
+	/** Whether the collision data has been set up for rendering */
+	bool bHasCollisionData = false;
+	/** Whether a complex collision mesh is available */
+	bool bHasComplexMeshData = false;
+	/** Collision trace flags */
+	ECollisionTraceFlag CollisionTraceFlag;
+	/** Collision Response of this component */
+	FCollisionResponseContainer CollisionResponse;
+	/** Cached AggGeom holding the collision shapes to render */
+	FKAggregateGeom CachedAggGeom;
 
-		if ( RenderBufferSet->Material == nullptr )
-		{
-			RenderBufferSet->Material = UMaterial::GetDefaultMaterial ( MD_Surface );
-		}
+	// Control access to collision data for debug rendering
+	mutable FCriticalSection CachedCollisionLock;
 
-		InitializeSingleBufferSet ( RenderBufferSet );
-	}
+#endif
 
+public: // Render Buffer
 
-	TUniqueFunction < void  ( int , int , int , const FVector3f& , FVector3f& , FVector3f& ) > MakeTangentsFunc ( bool bSkipAutoCompute = false )
-	{
-		const FDynamicMesh3* RenderMesh = ParentComponent->GetMesh ( );
-		// If the RenderMesh has tangents, use them. Otherwise we fall back to the orthogonal basis, below.
-		if ( RenderMesh && RenderMesh->HasAttributes ( ) && RenderMesh->Attributes ( )->HasTangentSpace ( ) )
-		{
-			UE::Geometry::FDynamicMeshTangents Tangents ( RenderMesh );
-			return [Tangents] ( int VertexID , int TriangleID , int TriVtxIdx , const FVector3f& Normal , FVector3f& TangentX , FVector3f& TangentY ) -> void
-			{
-				Tangents.GetTangentVectors ( TriangleID , TriVtxIdx , Normal , TangentX , TangentY );
-			};
-		}
+	FMeshRenderBufferSet* AllocateNewRenderBufferSet ( );
 
-		// fallback to orthogonal basis
-		return [] ( int VertexID , int TriangleID , int TriVtxIdx , const FVector3f& Normal , FVector3f& TangentX , FVector3f& TangentY ) -> void
-		{
-			UE::Geometry::VectorUtil::MakePerpVectors ( Normal , TangentX , TangentY );
-		};
-	}
+	void ReleaseRenderBufferSet ( FMeshRenderBufferSet* BufferSet );
+
+	//void GetActiveRenderBufferSets ( TArray < FMeshRenderBufferSet* >& Buffers ) const;
+
+public:
+
+	LOHPROCEDURALPLUGIN_API void Initialize ( const TFunctionRef < bool  (
+		TArray < FVector3f >& PositionList ,
+		TArray < uint32 >&    IndexList ,
+		TArray < FVector2f >& UV0List ,
+		TArray < FColor >&    ColorList ,
+		TArray < FVector3f >& NormalList ,
+		TArray < FVector3f >& TangentList ,
+		TArray < FVector3f >& BiTangentList
+		) >& InitFunc );
+
+public:
+
+	LOHPROCEDURALPLUGIN_API void SetDistanceFieldData ( const TSharedPtr < FDistanceFieldVolumeData >& InDistanceFieldData );
+
+	LOHPROCEDURALPLUGIN_API void SetLumenData ( const TArray < class FLumenCardBuildData >& InLumenCardData , const FBox& InLumenBound );
+
+public:
+
+	virtual void GetDistanceFieldAtlasData ( const class FDistanceFieldVolumeData*& OutDistanceFieldData , float& SelfShadowBias ) const override;
+
+	virtual bool HasDistanceFieldRepresentation ( ) const override;
+
+	virtual bool HasDynamicIndirectShadowCasterRepresentation ( ) const override;
+
+	virtual const FCardRepresentationData* GetMeshCardRepresentation ( ) const override;
+
+protected:
+
+	static FMaterialRenderProxy* GetEngineVertexColorMaterialProxy ( FMeshElementCollector& Collector , const FEngineShowFlags& EngineShowFlags , bool bProxyIsSelected , bool bIsHovered );
+
+	virtual void GetDynamicMeshElements (
+		const TArray < const FSceneView* >& Views ,
+		const FSceneViewFamily&             ViewFamily ,
+		uint32                              VisibilityMap ,
+		FMeshElementCollector&              Collector ) const override;
+
+	void GetCollisionDynamicMeshElements ( TArray < FMeshRenderBufferSet* >&   Buffers ,
+	                                       const FEngineShowFlags&             EngineShowFlags , bool bDrawCollisionView , bool bDrawSimpleCollision , bool bDrawComplexCollision ,
+	                                       bool                                bProxyIsSelected ,
+	                                       const TArray < const FSceneView* >& Views , uint32 VisibilityMap ,
+	                                       FMeshElementCollector&              Collector ) const;
+
+public:
+
+	virtual void DrawStaticElements ( FStaticPrimitiveDrawInterface* PDI ) override;
+
+	bool AllowStaticDrawPath ( const FSceneView* View ) const;
+
+	void DrawBatch ( FMeshElementCollector&           Collector ,
+	                 const FMeshRenderBufferSet&      RenderBuffers ,
+	                 const FDynamicMeshIndexBuffer32& IndexBuffer ,
+	                 FMaterialRenderProxy*            UseMaterial ,
+	                 bool                             bWireframe ,
+	                 ESceneDepthPriorityGroup         DepthPriority ,
+	                 int                              ViewIndex ,
+	                 FDynamicPrimitiveUniformBuffer&  DynamicPrimitiveUniformBuffer ) const;
+
+#if RHI_RAYTRACING
+
+	virtual bool IsRayTracingRelevant ( ) const override;
+	virtual bool HasRayTracingRepresentation ( ) const override;
+
+	virtual void GetDynamicRayTracingInstances ( FRayTracingInstanceCollector& Collector ) override;
 
 
 	/**
-	 * Initialize a single set of mesh buffers for the entire mesh
-	 */
-	void InitializeSingleBufferSet ( FMeshRenderBufferSet* RenderBuffers )
-	{
-		const FDynamicMesh3* Mesh = ParentComponent->GetMesh ( );
+	* Draw a single-frame raytracing FMeshBatch for a FMeshRenderBufferSet
+	*/
+	void DrawRayTracingBatch (
+		FRayTracingInstanceCollector&    Collector ,
+		const FMeshRenderBufferSet&      RenderBuffers ,
+		const FDynamicMeshIndexBuffer32& IndexBuffer ,
+		FRayTracingGeometry&             RayTracingGeometry ,
+		FMaterialRenderProxy*            UseMaterialProxy ,
+		ESceneDepthPriorityGroup         DepthPriority ,
+		FDynamicPrimitiveUniformBuffer&  DynamicPrimitiveUniformBuffer ) const;
 
-		// find suitable overlays
-		TArray < const FDynamicMeshUVOverlay* , TInlineAllocator < 8 > > UVOverlays;
-		const FDynamicMeshNormalOverlay*                                 NormalOverlay = nullptr;
-		const FDynamicMeshColorOverlay*                                  ColorOverlay  = nullptr;
-		if ( Mesh->HasAttributes ( ) )
-		{
-			const FDynamicMeshAttributeSet* Attributes = Mesh->Attributes ( );
-			NormalOverlay                              = Attributes->PrimaryNormals ( );
-			UVOverlays.SetNum ( Attributes->NumUVLayers ( ) );
-			for ( int32 k = 0 ; k < UVOverlays.Num ( ) ; ++k )
-			{
-				UVOverlays [ k ] = Attributes->GetUVLayer ( k );
-			}
-			ColorOverlay = Attributes->PrimaryColors ( );
-		}
-		TUniqueFunction < void  ( int , int , int , const FVector3f& , FVector3f& , FVector3f& ) > TangentsFunc = MakeTangentsFunc ( );
 
-		const bool bTrackTriangles = false;
-		const bool bParallel       = true;
-		InitializeBuffersFromOverlays ( RenderBuffers , Mesh ,
-		                                Mesh->TriangleCount ( ) , Mesh->TriangleIndicesItr ( ) ,
-		                                UVOverlays , NormalOverlay , ColorOverlay , TangentsFunc ,
-		                                bTrackTriangles , bParallel );
-
-		ENQUEUE_RENDER_COMMAND ( FChunbkedDynamicMeshSceneProxyInitializeSingle ) (
-		                                                                           [RenderBuffers] ( FRHICommandListImmediate& RHICmdList )
-		                                                                           {
-			                                                                           RenderBuffers->Upload ( );
-		                                                                           } );
-	}
+#endif // RHI_RAYTRACING
 
 public:
 
-	void SetDistanceFieldData ( const TSharedPtr < FDistanceFieldVolumeData >& InDistanceFieldData )
-	{
-		DistanceFieldData                    = InDistanceFieldData;
-		bSupportsDistanceFieldRepresentation = true;
+	virtual FPrimitiveViewRelevance GetViewRelevance ( const FSceneView* View ) const override;
 
-		bAffectDistanceFieldLighting = ParentComponent->bAffectDistanceFieldLighting;
-
-		UpdateVisibleInLumenScene ( );
-	}
-
-	void SetLumenData ( const TArray < class FLumenCardBuildData >& InLumenCardData , const FBox& InLumenBound )
-	{
-		if ( MeshCards.IsValid ( ) == false )
-		{
-			MeshCards = MakePimpl < FCardRepresentationData > ( );
-		}
-
-		FMeshCardsBuildData& MeshCardData = MeshCards.Get ( )->MeshCardsBuildData;
-
-		MeshCardData.bMostlyTwoSided = false;
-		MeshCardData.Bounds          = InLumenBound;
-		MeshCardData.CardBuildData   = InLumenCardData;
-
-		UpdateVisibleInLumenScene ( );
-	}
-
-	virtual void GetDistanceFieldAtlasData ( const class FDistanceFieldVolumeData*& OutDistanceFieldData , float& SelfShadowBias ) const override
-	{
-		if ( DistanceFieldData.IsValid ( ) )
-		{
-			OutDistanceFieldData = DistanceFieldData.Get ( );
-			SelfShadowBias       = 0.0f;
-		}
-	}
-
-	virtual bool HasDistanceFieldRepresentation ( ) const override
-	{
-		return CastsDynamicShadow ( ) && AffectsDistanceFieldLighting ( ) && DistanceFieldData.IsValid ( );
-	}
-
-	virtual bool HasDynamicIndirectShadowCasterRepresentation ( ) const override
-	{
-		return bCastsDynamicIndirectShadow && DistanceFieldData.IsValid ( );
-	}
+	void UpdatedReferencedMaterials ( );
 
 public:
 
-	virtual FPrimitiveViewRelevance GetViewRelevance ( const FSceneView* View ) const override
-	{
-		FPrimitiveViewRelevance Result;
+	void SetCollisionData ( );
 
-		Result.bDrawRelevance   = IsShown ( View );
-		Result.bShadowRelevance = IsShadowCast ( View );
+private:
 
-		bool bUseStaticDrawPath  = bPreferStaticDrawPath && AllowStaticDrawPath ( View );
-		Result.bDynamicRelevance = !bUseStaticDrawPath;
-		Result.bStaticRelevance  = bUseStaticDrawPath;
-#if WITH_EDITOR
-		//only check these in the editor
-		Result.bEditorVisualizeLevelInstanceRelevance = IsEditingLevelInstanceChild ( );
-		Result.bEditorStaticSelectionRelevance        = ( IsSelected ( ) || IsHovered ( ) );
-#endif
+	bool IsCollisionView ( const FEngineShowFlags& EngineShowFlags , bool& bDrawSimpleCollision , bool& bDrawComplexCollision ) const;
 
+public:
 
-		Result.bRenderInMainPass      = ShouldRenderInMainPass ( );
-		Result.bUsesLightingChannels  = GetLightingChannelMask ( ) != GetDefaultLightingChannelMask ( );
-		Result.bTranslucentSelfShadow = bCastVolumetricTranslucentShadow;
-		Result.bRenderCustomDepth     = ShouldRenderCustomDepth ( );
-		// Note that this is actually a getter. One may argue that it is poorly named.
-		MaterialRelevance.SetPrimitiveViewRelevance ( Result );
-		Result.bVelocityRelevance = DrawsVelocity ( ) && Result.bOpaque && Result.bRenderInMainPass;
+	virtual void GetLightRelevance ( const FLightSceneProxy* LightSceneProxy , bool& bDynamic , bool& bRelevant , bool& bLightMapped , bool& bShadowMapped ) const override;
 
-		return Result;
-	}
+	virtual bool CanBeOccluded ( ) const override;
 
-	virtual void UpdatedReferencedMaterials ( ) override
-	{
-		FBaseDynamicMeshSceneProxy::UpdatedReferencedMaterials ( );
+	virtual uint32 GetMemoryFootprint ( void ) const override;
 
-		// The material relevance may need updating.
-		MaterialRelevance = ParentComponent->GetMaterialRelevance ( GetScene ( ).GetFeatureLevel ( ) );
-	}
+	uint32 GetAllocatedSize ( void ) const;
 
-
-	virtual void GetLightRelevance ( const FLightSceneProxy* LightSceneProxy , bool& bDynamic , bool& bRelevant , bool& bLightMapped , bool& bShadowMapped ) const override
-	{
-		FPrimitiveSceneProxy::GetLightRelevance ( LightSceneProxy , bDynamic , bRelevant , bLightMapped , bShadowMapped );
-	}
-
-	virtual bool CanBeOccluded ( ) const override
-	{
-		return !MaterialRelevance.bDisableDepthTest;
-	}
-
-	virtual uint32 GetMemoryFootprint ( void ) const override { return ( sizeof( *this ) + GetAllocatedSize ( ) ); }
-
-	uint32 GetAllocatedSize ( void ) const { return ( FPrimitiveSceneProxy::GetAllocatedSize ( ) ); }
-
-	virtual SIZE_T GetTypeHash ( ) const override
-	{
-		static size_t UniquePointer;
-		return reinterpret_cast < size_t > ( &UniquePointer );
-	}
+	virtual SIZE_T GetTypeHash ( ) const override;
 };

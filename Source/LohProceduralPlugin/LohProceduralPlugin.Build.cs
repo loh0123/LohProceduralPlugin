@@ -29,7 +29,9 @@ public class LohProceduralPlugin : ModuleRules
 			{
 				"Core",
 				"GameplayTags",
-				"GeometryFramework"
+				"GeometryFramework",
+				"RHI",
+				"PhysicsCore"
 				// ... add other public dependencies that you statically link with here ...
 			}
 		);

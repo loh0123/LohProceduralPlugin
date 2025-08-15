@@ -6,14 +6,61 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Components/BaseDynamicMeshComponent.h"
+#include "LPPChunkedDynamicMeshProxy.h"
+#include "DynamicMesh/DynamicMesh3.h"
 #include "PhysicsEngine/AggregateGeom.h"
 
 #include "LPPChunkedDynamicMesh.generated.h"
 
+USTRUCT ( )
+struct FLPPChunkedDynamicCompactMeshData
+{
+	GENERATED_BODY ( )
+
+	FLPPChunkedDynamicCompactMeshData ( ) = default;
+
+	FLPPChunkedDynamicCompactMeshData ( const int32 InNumVertices , const bool bHasColor )
+	{
+		Position.AddUninitialized ( InNumVertices );
+		Normal.AddUninitialized ( InNumVertices );
+		Tangent.AddUninitialized ( InNumVertices );
+		BiTangent.AddUninitialized ( InNumVertices );
+		UV0.AddUninitialized ( InNumVertices );
+
+		if ( bHasColor )
+		{
+			Color.AddUninitialized ( InNumVertices );
+		}
+	}
+
+public:
+
+	/** Vertex position */
+	UPROPERTY ( )
+	TArray < FVector3f > Position = TArray < FVector3f > ( );
+
+	/** Vertex normal */
+	UPROPERTY ( )
+	TArray < FVector3f > Normal = TArray < FVector3f > ( );
+
+	/** Vertex tangent */
+	UPROPERTY ( )
+	TArray < FVector3f > Tangent = TArray < FVector3f > ( );
+
+	UPROPERTY ( )
+	TArray < FVector3f > BiTangent = TArray < FVector3f > ( );
+
+	/** Vertex color */
+	UPROPERTY ( )
+	TArray < FColor > Color = TArray < FColor > ( );
+
+	/** Vertex texture co-ordinate */
+	UPROPERTY ( )
+	TArray < FVector2f > UV0 = TArray < FVector2f > ( );
+};
 
 UCLASS ( ClassGroup=(Custom) , meta=(BlueprintSpawnableComponent) )
-class LOHPROCEDURALPLUGIN_API ULPPChunkedDynamicMesh : public UBaseDynamicMeshComponent , public IInterface_CollisionDataProvider
+class LOHPROCEDURALPLUGIN_API ULPPChunkedDynamicMesh : public UMeshComponent , public IInterface_CollisionDataProvider
 {
 	GENERATED_BODY ( )
 
@@ -36,26 +83,14 @@ public:
 
 public:
 
-	virtual void ProcessMesh ( TFunctionRef < void  ( const UE::Geometry::FDynamicMesh3& ) > ProcessFunc ) const override;
-
-	virtual FDynamicMesh3*       GetMesh ( ) override { return MeshObject->GetMeshPtr ( ); }
-	virtual const FDynamicMesh3* GetMesh ( ) const override { return MeshObject->GetMeshPtr ( ); }
-	virtual UDynamicMesh*        GetDynamicMesh ( ) override { return MeshObject; }
-
-	virtual void SetMesh ( UE::Geometry::FDynamicMesh3&& MoveMesh ) override;
-	virtual void ApplyTransform ( const FTransform3d& Transform , bool bInvert ) override;
+	virtual void SetMesh ( FDynamicMesh3&& MoveMesh );
 
 	virtual void ClearMesh ( );
 
 public:
 
-	virtual void ApplyChange ( const FMeshVertexChange* Change , bool bRevert ) override;
-	virtual void ApplyChange ( const FMeshChange* Change , bool bRevert ) override;
-	virtual void ApplyChange ( const FMeshReplacementChange* Change , bool bRevert ) override;
-
-public:
-
-	virtual void NotifyMeshUpdated ( ) override;
+	virtual void NotifyMeshUpdated ( const FDynamicMesh3& MeshData );
+	virtual void NotifyMaterialSetUpdated ( );
 
 protected:
 
@@ -69,9 +104,6 @@ protected:
 
 	/** Current local-space bounding box of Mesh */
 	UE::Geometry::FAxisAlignedBox3d LocalBounds;
-
-	/** Recompute LocalBounds from the current Mesh */
-	void UpdateLocalBounds ( );
 
 public:
 
@@ -92,7 +124,22 @@ protected:
 
 public:
 
-	virtual FBaseDynamicMeshSceneProxy* GetBaseSceneProxy ( ) override;
+	// UMeshComponent Interface.
+	virtual int32               GetNumMaterials ( ) const override;
+	virtual UMaterialInterface* GetMaterial ( int32 ElementIndex ) const override;
+	virtual FMaterialRelevance  GetMaterialRelevance ( ERHIFeatureLevel::Type InFeatureLevel ) const override;
+	virtual void                SetMaterial ( int32 ElementIndex , UMaterialInterface* Material ) override;
+	virtual void                GetUsedMaterials ( TArray < UMaterialInterface* >& OutMaterials , bool bGetDebugMaterials = false ) const override;
+
+	virtual void SetNumMaterials ( int32 NumMaterials );
+
+	UPROPERTY ( )
+	TArray < TObjectPtr < UMaterialInterface > > BaseMaterials;
+
+public:
+
+	//~ Begin UPrimitiveComponent Interface.
+	FLPPChunkedDynamicMeshProxy* GetBaseSceneProxy ( ) const;
 
 	//~ Begin UPrimitiveComponent Interface.
 	virtual FPrimitiveSceneProxy* CreateSceneProxy ( ) override;
@@ -102,6 +149,6 @@ public:
 
 protected:
 
-	UPROPERTY ( Instanced )
-	TObjectPtr < UDynamicMesh > MeshObject;
+	UPROPERTY ( )
+	FLPPChunkedDynamicCompactMeshData MeshCompactData;
 };

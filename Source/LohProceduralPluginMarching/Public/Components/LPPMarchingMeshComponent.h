@@ -8,6 +8,7 @@
 #include "CoreMinimal.h"
 #include "GameplayTagContainer.h"
 #include "MeshCardBuild.h"
+#include "Components/BaseDynamicMeshComponent.h"
 #include "Components/LPPChunkedDynamicMesh.h"
 #include "Subsystem/LPPProceduralWorldSubsystem.h"
 #include "LPPMarchingMeshComponent.generated.h"
@@ -59,7 +60,9 @@ struct FLFPMarchingPassData
 
 public:
 
+	bool       bIsOcclusionTest            = false;
 	bool       bNeedRenderData             = false;
+	bool       bNeedSimpleRenderData       = false;
 	bool       bNeedSimpleCollisionData    = false;
 	bool       bIsChunkFaceCullingDisable  = false;
 	bool       bIsRegionFaceCullingDisable = false;
@@ -151,10 +154,13 @@ protected:
 	bool bGenerateDistanceField = false;
 
 	UPROPERTY ( EditDefaultsOnly , Category="Setting" )
-	bool bNeedRenderData = false;
+	bool bGenerateRenderData = false;
 
 	UPROPERTY ( EditDefaultsOnly , Category="Setting" )
-	bool bNeedSimpleCollisionData = false;
+	bool bSimplifyRenderData = false;
+
+	UPROPERTY ( EditDefaultsOnly , Category="Setting" )
+	bool bGenerateSimpleBoxCollisionData = false;
 
 protected:
 
@@ -166,6 +172,9 @@ protected:
 
 	UPROPERTY ( Transient )
 	int32 ChunkIndex = INDEX_NONE;
+
+	UPROPERTY ( Transient )
+	FTimerHandle OcclusionTestTimerHandle;
 
 public:
 
@@ -208,7 +217,7 @@ public:
 protected:
 
 	// Add Mesh Fill
-	void UpdateDistanceField ( );
+	void UpdateDistanceField ( const FDynamicMesh3& ReadMesh );
 
 protected:
 
@@ -216,7 +225,7 @@ protected:
 
 public:
 
-	virtual void NotifyMeshUpdated ( ) override;
+	virtual void NotifyMeshUpdated ( const FDynamicMesh3& MeshData ) override;
 
 private:
 
