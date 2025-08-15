@@ -472,7 +472,6 @@ TUniquePtr < FLFPMarchingThreadData > ULPPMarchingMeshComponent::ComputeNewMarch
 		FDynamicMesh3& MeshData = NewMeshData->MeshData;
 		{
 			MeshData.EnableAttributes ( );
-			MeshData.Attributes ( )->EnableTangents ( );
 		}
 
 		bool bHasMesh = false;

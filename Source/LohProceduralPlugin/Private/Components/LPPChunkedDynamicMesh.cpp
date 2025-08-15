@@ -6,6 +6,7 @@
 
 #include "Components/LPPChunkedDynamicMesh.h"
 
+#include "Kismet/KismetMathLibrary.h"
 #include "Math/BoxSphereBounds.h"
 
 
@@ -96,22 +97,25 @@ void ULPPChunkedDynamicMesh::SetMesh ( FDynamicMesh3&& MoveMesh )
 				const int32 ColorIndex    = TriColorIndexList [ IndexOffset ];
 
 				MeshCompactData.Position [ ListIndex ] = static_cast < FVector3f > ( DynamicMeshData.GetVertex ( TriangleIndex ) );
-
-				MeshCompactData.Normal [ ListIndex ] = NormalIndex != FDynamicMesh3::InvalidID ? NormalOverlay->GetElement ( NormalIndex ) : DynamicMeshData.GetVertexNormal ( TriangleIndex );
-
-				if ( bHasTangents )
-				{
-					Tangents.GetTangentVectors ( TriangleID , IndexOffset , MeshCompactData.Normal [ ListIndex ] , MeshCompactData.Tangent [ ListIndex ] , MeshCompactData.BiTangent [ ListIndex ] );
-				}
-				else
-				{
-					UE::Geometry::VectorUtil::MakePerpVectors ( MeshCompactData.Normal [ ListIndex ] , MeshCompactData.Tangent [ ListIndex ] , MeshCompactData.BiTangent [ ListIndex ] );
-				}
+				MeshCompactData.Normal [ ListIndex ]   = NormalIndex != FDynamicMesh3::InvalidID ? NormalOverlay->GetElement ( NormalIndex ) : DynamicMeshData.GetVertexNormal ( TriangleIndex );
 
 				if ( bHasColor )
 				{
 					MeshCompactData.Color [ ListIndex ] = static_cast < FLinearColor > ( ColorIndex != FDynamicMesh3::InvalidID ? ColorOverlay->GetElement ( ColorIndex ) : static_cast < FVector4f > ( DynamicMeshData.GetVertexColor ( TriangleIndex ) ) ).ToFColor ( true );
 				}
+			}
+
+			{
+				//MeshCompactData.Normal [ idx ] = NormalIndex != FDynamicMesh3::InvalidID ? NormalOverlay->GetElement ( NormalIndex ) : DynamicMeshData.GetVertexNormal ( TriangleIndex );
+				//
+				//if ( bHasTangents )
+				//{
+				//	Tangents.GetTangentVectors ( TriangleID , IndexOffset , MeshCompactData.Normal [ ListIndex ] , MeshCompactData.Tangent [ ListIndex ] , MeshCompactData.BiTangent [ ListIndex ] );
+				//}
+				//else
+				//{
+				//	UE::Geometry::VectorUtil::MakePerpVectors ( MeshCompactData.Normal [ ListIndex ] , MeshCompactData.Tangent [ ListIndex ] , MeshCompactData.BiTangent [ ListIndex ] );
+				//}
 			}
 
 			for ( int32 TexIndex = 0 ; TexIndex < 1 /*NumTexCoords */; ++TexIndex )
@@ -214,7 +218,7 @@ bool ULPPChunkedDynamicMesh::GetPhysicsTriMeshData ( struct FTriMeshCollisionDat
 
 bool ULPPChunkedDynamicMesh::ContainsPhysicsTriMeshData ( bool InUseAllTriData ) const
 {
-	return MeshCompactData.Position.Num ( ) > 2;
+	return MeshCompactData.Position.Num ( ) > 2 && bEnableComplexCollision;
 }
 
 bool ULPPChunkedDynamicMesh::WantsNegXTriMesh ( )
@@ -400,18 +404,24 @@ FPrimitiveSceneProxy* ULPPChunkedDynamicMesh::CreateSceneProxy ( )
 			                      return false;
 		                      }
 
-		                      PositionList  = MeshCompactData.Position;
-		                      UV0List       = MeshCompactData.UV0;
-		                      ColorList     = MeshCompactData.Color;
-		                      NormalList    = MeshCompactData.Normal;
-		                      TangentList   = MeshCompactData.Tangent;
-		                      BiTangentList = MeshCompactData.BiTangent;
+		                      PositionList = MeshCompactData.Position;
+		                      UV0List      = MeshCompactData.UV0;
+		                      ColorList    = MeshCompactData.Color;
+		                      NormalList   = MeshCompactData.Normal;
+		                      //TangentList   = MeshCompactData.Tangent;
+		                      //BiTangentList = MeshCompactData.BiTangent;
+
+		                      //NormalList.AddUninitialized ( MeshCompactData.Position.Num ( ) );
+		                      TangentList.AddUninitialized ( MeshCompactData.Position.Num ( ) );
+		                      BiTangentList.AddUninitialized ( MeshCompactData.Position.Num ( ) );
 
 		                      IndexList.Reserve ( MeshCompactData.Position.Num ( ) );
 
 		                      for ( int32 Index = 0 ; Index < MeshCompactData.Position.Num ( ) ; ++Index )
 		                      {
 			                      IndexList.Add ( Index );
+
+			                      UE::Geometry::VectorUtil::MakePerpVectors ( MeshCompactData.Normal [ Index ] , TangentList [ Index ] , BiTangentList [ Index ] );
 		                      }
 
 		                      return true;
