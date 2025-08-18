@@ -6,6 +6,7 @@
 #include "Components/LPPMarchingMeshComponent.h"
 
 #include "DynamicMeshEditor.h"
+#include "MeshAdapterTransforms.h"
 #include "MeshCardBuild.h"
 #include "MeshSimplification.h"
 #include "Components/LFPChunkedTagDataComponent.h"
@@ -18,6 +19,7 @@
 #include "Library/LPPMarchingFunctionLibrary.h"
 #include "Math/LFPGridLibrary.h"
 #include "Operations/MeshPlaneCut.h"
+#include "Parameterization/DynamicMeshUVEditor.h"
 #include "Render/LFPRenderLibrary.h"
 #include "Runtime/GeometryFramework/Private/Components/DynamicMeshSceneProxy.h"
 #include "Spatial/FastWinding.h"
@@ -232,9 +234,12 @@ bool ULPPMarchingMeshComponent::UpdateRender ( )
 	PassData.bNeedRenderData          = bGenerateRenderData;
 	PassData.bNeedSimpleRenderData    = bSimplifyRenderData;
 	PassData.bNeedSimpleCollisionData = bGenerateSimpleBoxCollisionData;
+	PassData.bRecomputeBoxUV          = bRecomputeBoxUV;
+	PassData.UVBoxTransform           = UVBoxTransform;
 	PassData.MeshFullSize             = GetMeshSize ( );
 	PassData.DataSize                 = GetDataSize ( );
 	PassData.BoundExpand              = BoundExpand;
+	PassData.VertMergeDistance        = VertexMergeDistance;
 	PassData.StartTime                = FDateTime::UtcNow ( );
 
 	PassData.RenderSetting = RenderSetting;
@@ -542,16 +547,35 @@ TUniquePtr < FLFPMarchingThreadData > ULPPMarchingMeshComponent::ComputeNewMarch
 				FVector ( 0 , 0 , -1 )
 			};
 
+			UE::Geometry::FMergeCoincidentMeshEdges Welder ( &MeshData );
+			Welder.MergeVertexTolerance = 2.0f;
+			Welder.OnlyUniquePairs      = false;
+			Welder.Apply ( );
+
 			for ( const FVector& EdgeDirection : EdgeDirectionList )
 			{
 				UE::Geometry::FMeshPlaneCut Cut ( &MeshData , EdgeDirection * MeshBoundHalfSize , EdgeDirection );
+				Cut.bCollapseDegenerateEdgesOnCut = false;
 				Cut.Cut ( );
 			}
 
-			UE::Geometry::FMergeCoincidentMeshEdges Welder ( &MeshData );
-			Welder.MergeVertexTolerance = 1.0f;
-			Welder.OnlyUniquePairs      = false;
-			Welder.Apply ( );
+			if ( PassData.bRecomputeBoxUV )
+			{
+				FDynamicMeshUVOverlay*             UVOverlay = MeshData.Attributes ( )->PrimaryUV ( );
+				UE::Geometry::FDynamicMeshUVEditor UVEditor ( &MeshData , UVOverlay );
+
+				TArray < int32 > TriangleROI;
+				for ( const int32 TriangleID : MeshData.TriangleIndicesItr ( ) )
+				{
+					TriangleROI.Add ( TriangleID );
+				}
+
+				constexpr int32 MinIslandTriCount = 2;
+
+				MeshAdapterTransforms::FFrame3d ProjectionFrame ( PassData.UVBoxTransform );
+				UVEditor.SetTriangleUVsFromBoxProjection ( TriangleROI , [&] ( const FVector3d& Pos ) { return Pos; } ,
+				                                           ProjectionFrame , PassData.UVBoxTransform.GetScale3D ( ) , MinIslandTriCount );
+			}
 
 			if ( PassData.bNeedSimpleRenderData )
 			{
@@ -559,12 +583,13 @@ TUniquePtr < FLFPMarchingThreadData > ULPPMarchingMeshComponent::ComputeNewMarch
 
 				constexpr float AngleThreshold = 0.001;
 
+				Simplifier.bPreserveBoundaryShape = false;
 				Simplifier.SimplifyToMinimalPlanar ( AngleThreshold );
 			}
-		}
 
-		MeshData.RemoveUnusedVertices ( );
-		MeshData.CompactInPlace ( nullptr );
+			MeshData.RemoveUnusedVertices ( );
+			MeshData.CompactInPlace ( nullptr );
+		}
 	}
 
 	if ( Progress.Cancelled ( ) )

@@ -66,9 +66,12 @@ public:
 	bool       bNeedSimpleCollisionData    = false;
 	bool       bIsChunkFaceCullingDisable  = false;
 	bool       bIsRegionFaceCullingDisable = false;
+	bool       bRecomputeBoxUV             = false;
+	FTransform UVBoxTransform              = FTransform ( );
 	FVector    MeshFullSize                = FVector ( );
 	FIntVector DataSize                    = FIntVector ( );
 	float      BoundExpand                 = 0.0f;
+	float      VertMergeDistance           = 2.0f;
 	FDateTime  StartTime                   = FDateTime ( );
 
 	UPROPERTY ( )
@@ -145,6 +148,12 @@ protected:
 	FGameplayTag HandleTag = FGameplayTag::EmptyTag;
 
 	UPROPERTY ( EditDefaultsOnly , Category="Setting" )
+	FTransform UVBoxTransform = FTransform ( );
+
+	UPROPERTY ( EditDefaultsOnly , Category="Setting" )
+	float VertexMergeDistance = 2.0f;
+
+	UPROPERTY ( EditDefaultsOnly , Category="Setting" )
 	float DistanceFieldResolutionScale = 1.0f;
 
 	UPROPERTY ( EditDefaultsOnly , Category="Setting" )
@@ -161,6 +170,9 @@ protected:
 
 	UPROPERTY ( EditDefaultsOnly , Category="Setting" )
 	bool bGenerateSimpleBoxCollisionData = false;
+
+	UPROPERTY ( EditDefaultsOnly , Category="Setting" )
+	bool bRecomputeBoxUV = false;
 
 protected:
 
