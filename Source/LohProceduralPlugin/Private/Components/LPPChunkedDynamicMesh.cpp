@@ -146,7 +146,7 @@ void ULPPChunkedDynamicMesh::ClearMesh ( )
 
 	InvalidatePhysicsData ( );
 
-	FDynamicMesh3 EmptyMesh;
+	const FDynamicMesh3 EmptyMesh;
 
 	NotifyMeshUpdated ( EmptyMesh );
 }

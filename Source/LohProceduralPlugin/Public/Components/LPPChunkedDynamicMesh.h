@@ -23,8 +23,6 @@ struct FLPPChunkedDynamicCompactMeshData
 	{
 		Position.AddUninitialized ( InNumVertices );
 		Normal.AddUninitialized ( InNumVertices );
-		//Tangent.AddUninitialized ( InNumVertices / 3 );
-		//BiTangent.AddUninitialized ( InNumVertices / 3 );
 		UV0.AddUninitialized ( InNumVertices );
 
 		if ( bHasColor )
@@ -42,14 +40,6 @@ public:
 	/** Vertex normal */
 	UPROPERTY ( )
 	TArray < FVector3f > Normal = TArray < FVector3f > ( );
-
-	/** Vertex tangent */
-	//UPROPERTY ( )
-	//TArray < FVector3f > Tangent = TArray < FVector3f > ( );
-
-	/** Vertex BiTangent */
-	//UPROPERTY ( )
-	//TArray < FVector3f > BiTangent = TArray < FVector3f > ( );
 
 	/** Vertex color */
 	UPROPERTY ( )
