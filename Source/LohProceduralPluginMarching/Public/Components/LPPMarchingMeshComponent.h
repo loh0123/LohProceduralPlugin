@@ -209,9 +209,6 @@ protected:
 	UPROPERTY ( Transient )
 	int32 ChunkIndex = INDEX_NONE;
 
-	UPROPERTY ( Transient )
-	FTimerHandle OcclusionTestTimerHandle;
-
 public:
 
 	UFUNCTION ( BlueprintCallable , Category="LFPMarchingMeshComponent" )

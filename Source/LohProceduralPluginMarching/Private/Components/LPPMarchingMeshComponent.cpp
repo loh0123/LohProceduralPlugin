@@ -90,7 +90,7 @@ FVector ULPPMarchingMeshComponent::GetMeshSize ( ) const
 
 bool ULPPMarchingMeshComponent::IsDataComponentValid ( ) const
 {
-	return IsValid ( GetWorld ( ) ) && IsValid ( DataComponent ) && IsValid ( RenderSetting ) && RegionIndex > INDEX_NONE && ChunkIndex > INDEX_NONE;
+	return IsValid ( GetWorld ( ) ) && IsValid ( DataComponent ) && IsValid ( RenderSetting ) && DataComponent->IsChunkIndexValid ( RegionIndex , ChunkIndex );
 }
 
 void ULPPMarchingMeshComponent::GetFaceCullingSetting ( bool& bIsChunkFaceCullingDisable , bool& bIsRegionFaceCullingDisable ) const
