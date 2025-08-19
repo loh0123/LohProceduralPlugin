@@ -231,16 +231,21 @@ bool ULPPMarchingMeshComponent::UpdateRender ( )
 
 	GetFaceCullingSetting ( PassData.bIsChunkFaceCullingDisable , PassData.bIsRegionFaceCullingDisable );
 
-	PassData.bNeedRenderData          = bGenerateRenderData;
-	PassData.bNeedSimpleRenderData    = bSimplifyRenderData;
-	PassData.bNeedSimpleCollisionData = bGenerateSimpleBoxCollisionData;
-	PassData.bRecomputeBoxUV          = bRecomputeBoxUV;
-	PassData.UVBoxTransform           = UVBoxTransform;
-	PassData.MeshFullSize             = GetMeshSize ( );
-	PassData.DataSize                 = GetDataSize ( );
-	PassData.BoundExpand              = BoundExpand;
-	PassData.VertMergeDistance        = VertexMergeDistance;
-	PassData.StartTime                = FDateTime::UtcNow ( );
+	PassData.bRenderData       = bGenerateRenderData;
+	PassData.MeshFullSize      = GetMeshSize ( );
+	PassData.DataSize          = GetDataSize ( );
+	PassData.BoundExpand       = BoundExpand;
+	PassData.EdgeMergeDistance = EdgeMergeDistance;
+
+	PassData.bSimplifyRenderData = bSimplifyRenderData;
+	PassData.SimplifyAngle       = SimplifyAngle;
+
+	PassData.bSimpleBoxCollisionData = bGenerateSimpleBoxCollisionData;
+
+	PassData.bRecomputeBoxUV = bRecomputeBoxUV;
+	PassData.UVBoxTransform  = UVBoxTransform;
+
+	PassData.StartTime = FDateTime::UtcNow ( );
 
 	PassData.RenderSetting = RenderSetting;
 
@@ -470,7 +475,7 @@ TUniquePtr < FLFPMarchingThreadData > ULPPMarchingMeshComponent::ComputeNewMarch
 	}
 
 	// Mesh Data
-	if ( PassData.bNeedRenderData )
+	if ( PassData.bRenderData )
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE ( MarchingMesh_GeneratingMesh );
 
@@ -537,26 +542,30 @@ TUniquePtr < FLFPMarchingThreadData > ULPPMarchingMeshComponent::ComputeNewMarch
 				}
 			}
 
-			const FVector EdgeDirectionList [ 6 ] =
 			{
-				FVector ( 1 , 0 , 0 ) ,
-				FVector ( 0 , 1 , 0 ) ,
-				FVector ( 0 , 0 , 1 ) ,
-				FVector ( -1 , 0 , 0 ) ,
-				FVector ( 0 , -1 , 0 ) ,
-				FVector ( 0 , 0 , -1 )
-			};
+				UE::Geometry::FMergeCoincidentMeshEdges Welder ( &MeshData );
+				Welder.MergeVertexTolerance = PassData.EdgeMergeDistance;
+				Welder.OnlyUniquePairs      = false;
+				Welder.Apply ( );
+			}
 
-			UE::Geometry::FMergeCoincidentMeshEdges Welder ( &MeshData );
-			Welder.MergeVertexTolerance = 2.0f;
-			Welder.OnlyUniquePairs      = false;
-			Welder.Apply ( );
-
-			for ( const FVector& EdgeDirection : EdgeDirectionList )
 			{
-				UE::Geometry::FMeshPlaneCut Cut ( &MeshData , EdgeDirection * MeshBoundHalfSize , EdgeDirection );
-				Cut.bCollapseDegenerateEdgesOnCut = false;
-				Cut.Cut ( );
+				const FVector EdgeDirectionList [ 6 ] =
+				{
+					FVector ( 1 , 0 , 0 ) ,
+					FVector ( 0 , 1 , 0 ) ,
+					FVector ( 0 , 0 , 1 ) ,
+					FVector ( -1 , 0 , 0 ) ,
+					FVector ( 0 , -1 , 0 ) ,
+					FVector ( 0 , 0 , -1 )
+				};
+
+				for ( const FVector& EdgeDirection : EdgeDirectionList )
+				{
+					UE::Geometry::FMeshPlaneCut Cut ( &MeshData , EdgeDirection * MeshBoundHalfSize , EdgeDirection );
+					Cut.bCollapseDegenerateEdgesOnCut = false;
+					Cut.Cut ( );
+				}
 			}
 
 			if ( PassData.bRecomputeBoxUV )
@@ -577,13 +586,12 @@ TUniquePtr < FLFPMarchingThreadData > ULPPMarchingMeshComponent::ComputeNewMarch
 				                                           ProjectionFrame , PassData.UVBoxTransform.GetScale3D ( ) , MinIslandTriCount );
 			}
 
-			if ( PassData.bNeedSimpleRenderData )
+			if ( PassData.bSimplifyRenderData )
 			{
 				UE::Geometry::FQEMSimplification Simplifier ( &MeshData );
 
-				constexpr float AngleThreshold = 0.001;
+				constexpr float AngleThreshold = 0.1;
 
-				Simplifier.bPreserveBoundaryShape = false;
 				Simplifier.SimplifyToMinimalPlanar ( AngleThreshold );
 			}
 
@@ -598,7 +606,7 @@ TUniquePtr < FLFPMarchingThreadData > ULPPMarchingMeshComponent::ComputeNewMarch
 	}
 
 	// Lumen Card
-	if ( PassData.bNeedRenderData )
+	if ( PassData.bRenderData )
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE ( MarchingMesh_GeneratingLumen );
 
@@ -796,7 +804,7 @@ TUniquePtr < FLFPMarchingThreadData > ULPPMarchingMeshComponent::ComputeNewMarch
 	}
 
 	// Collision Box
-	if ( PassData.bNeedSimpleCollisionData )
+	if ( PassData.bSimpleBoxCollisionData )
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE ( MarchingMesh_GeneratingBoxCollision );
 

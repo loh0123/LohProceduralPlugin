@@ -60,19 +60,36 @@ struct FLFPMarchingPassData
 
 public:
 
-	bool       bIsOcclusionTest            = false;
-	bool       bNeedRenderData             = false;
-	bool       bNeedSimpleRenderData       = false;
-	bool       bNeedSimpleCollisionData    = false;
-	bool       bIsChunkFaceCullingDisable  = false;
-	bool       bIsRegionFaceCullingDisable = false;
-	bool       bRecomputeBoxUV             = false;
-	FTransform UVBoxTransform              = FTransform ( );
-	FVector    MeshFullSize                = FVector ( );
-	FIntVector DataSize                    = FIntVector ( );
-	float      BoundExpand                 = 0.0f;
-	float      VertMergeDistance           = 2.0f;
-	FDateTime  StartTime                   = FDateTime ( );
+	bool bIsChunkFaceCullingDisable  = false;
+	bool bIsRegionFaceCullingDisable = false;
+
+public:
+
+	bool       bRenderData       = false;
+	FVector    MeshFullSize      = FVector ( );
+	FIntVector DataSize          = FIntVector ( );
+	float      BoundExpand       = 0.0f;
+	float      EdgeMergeDistance = 0.1f;
+
+public:
+
+	bool  bSimplifyRenderData = false;
+	float SimplifyAngle       = 0.1f;
+
+public:
+
+	bool bSimpleBoxCollisionData = false;
+
+public:
+
+	bool       bRecomputeBoxUV = false;
+	FTransform UVBoxTransform  = FTransform ( );
+
+public:
+
+	FDateTime StartTime = FDateTime ( );
+
+public:
 
 	UPROPERTY ( )
 	TObjectPtr < ULPPMarchingData > RenderSetting = nullptr;
@@ -141,38 +158,45 @@ public:
 
 protected:
 
-	UPROPERTY ( EditDefaultsOnly , Category="Setting" )
-	TObjectPtr < ULPPMarchingData > RenderSetting = nullptr;
-
-	UPROPERTY ( EditDefaultsOnly , Category="Setting" )
-	FGameplayTag HandleTag = FGameplayTag::EmptyTag;
-
-	UPROPERTY ( EditDefaultsOnly , Category="Setting" )
-	FTransform UVBoxTransform = FTransform ( );
-
-	UPROPERTY ( EditDefaultsOnly , Category="Setting" )
-	float VertexMergeDistance = 2.0f;
-
-	UPROPERTY ( EditDefaultsOnly , Category="Setting" )
-	float DistanceFieldResolutionScale = 1.0f;
-
-	UPROPERTY ( EditDefaultsOnly , Category="Setting" )
-	float BoundExpand = 25.0f;
-
-	UPROPERTY ( EditDefaultsOnly , Category="Setting" )
-	bool bGenerateDistanceField = false;
-
-	UPROPERTY ( EditDefaultsOnly , Category="Setting" )
+	UPROPERTY ( EditDefaultsOnly , Category="Setting|Render" )
 	bool bGenerateRenderData = false;
 
-	UPROPERTY ( EditDefaultsOnly , Category="Setting" )
+	UPROPERTY ( EditDefaultsOnly , Category="Setting|Render" )
+	TObjectPtr < ULPPMarchingData > RenderSetting = nullptr;
+
+	UPROPERTY ( EditDefaultsOnly , Category="Setting|Render" )
+	FGameplayTag HandleTag = FGameplayTag::EmptyTag;
+
+	UPROPERTY ( EditDefaultsOnly , Category="Setting|Render" )
+	float EdgeMergeDistance = 2.0f;
+
+	UPROPERTY ( EditDefaultsOnly , Category="Setting|Render" )
+	float BoundExpand = 25.0f;
+
+
+	UPROPERTY ( EditDefaultsOnly , Category="Setting|Simplify" )
 	bool bSimplifyRenderData = false;
 
-	UPROPERTY ( EditDefaultsOnly , Category="Setting" )
+	UPROPERTY ( EditDefaultsOnly , Category="Setting|Simplify" )
+	float SimplifyAngle = 2.0f;
+
+
+	UPROPERTY ( EditDefaultsOnly , Category="Setting|UV" )
+	bool bRecomputeBoxUV = false;
+
+	UPROPERTY ( EditDefaultsOnly , Category="Setting|UV" )
+	FTransform UVBoxTransform = FTransform ( );
+
+
+	UPROPERTY ( EditDefaultsOnly , Category="Setting|Collision" )
 	bool bGenerateSimpleBoxCollisionData = false;
 
-	UPROPERTY ( EditDefaultsOnly , Category="Setting" )
-	bool bRecomputeBoxUV = false;
+
+	UPROPERTY ( EditDefaultsOnly , Category="Setting|DistanceField" )
+	bool bGenerateDistanceField = false;
+
+	UPROPERTY ( EditDefaultsOnly , Category="Setting|DistanceField" )
+	float DistanceFieldResolutionScale = 1.0f;
 
 protected:
 

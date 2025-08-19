@@ -60,14 +60,14 @@ void ULPPChunkRequester::LoadChunkByNearbyPoint ( )
 		return;
 	}
 
-	ULPPChunkManagerSubsystem* ManagerSystem = nullptr;
+	ULPPChunkManagerSubsystem* ManagerSystem;
 
 	if ( ManagerSystem = GetWorld ( )->GetSubsystem < ULPPChunkManagerSubsystem > ( ) ; IsValid ( ManagerSystem ) == false )
 	{
 		return;
 	}
 
-	const ULFPGridTagDataComponent* DataComponent = nullptr;
+	const ULFPGridTagDataComponent* DataComponent;
 
 	if ( DataComponent = ManagerSystem->GetDataComponent ( CurrentCenterChunkIndex.X ) ; IsValid ( DataComponent ) == false )
 	{
@@ -102,14 +102,14 @@ void ULPPChunkRequester::UnloadOutBoundChunk ( )
 		return;
 	}
 
-	ULPPChunkManagerSubsystem* ManagerSystem = nullptr;
+	ULPPChunkManagerSubsystem* ManagerSystem;
 
 	if ( ManagerSystem = GetWorld ( )->GetSubsystem < ULPPChunkManagerSubsystem > ( ) ; IsValid ( ManagerSystem ) == false )
 	{
 		return;
 	}
 
-	const ULFPGridTagDataComponent* DataComponent = nullptr;
+	const ULFPGridTagDataComponent* DataComponent;
 
 	if ( DataComponent = ManagerSystem->GetDataComponent ( CurrentCenterChunkIndex.X ) ; IsValid ( DataComponent ) == false )
 	{
@@ -123,8 +123,6 @@ void ULPPChunkRequester::UnloadOutBoundChunk ( )
 
 	TArray < FIntVector > RemoveList;
 
-	const FIntVector CurrentChunkPos = DataComponent->ToChunkGridPosition ( FIntPoint ( CurrentCenterChunkIndex.Y , CurrentCenterChunkIndex.Z ) );
-
 	for ( const FIntVector& LoadedChunkIndex : LoadedChunkMap )
 	{
 		if ( LoadedChunkIndex.X != CurrentCenterChunkIndex.X )
@@ -133,8 +131,7 @@ void ULPPChunkRequester::UnloadOutBoundChunk ( )
 		}
 		else
 		{
-			const FIntVector LoadedChunkPos = DataComponent->ToChunkGridPosition ( FIntPoint ( LoadedChunkIndex.Y , LoadedChunkIndex.Z ) );
-			const FIntVector Distance       = DataComponent->GetDistanceToChunkGridIndex ( FIntPoint ( LoadedChunkIndex.Y , LoadedChunkIndex.Z ) , FIntPoint ( CurrentCenterChunkIndex.Y , CurrentCenterChunkIndex.Z ) );
+			const FIntVector Distance = DataComponent->GetDistanceToChunkGridIndex ( FIntPoint ( LoadedChunkIndex.Y , LoadedChunkIndex.Z ) , FIntPoint ( CurrentCenterChunkIndex.Y , CurrentCenterChunkIndex.Z ) );
 
 			if ( Distance.GetMax ( ) > MaxLoadDistance )
 			{
