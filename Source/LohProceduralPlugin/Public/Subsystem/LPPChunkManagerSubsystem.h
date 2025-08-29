@@ -57,8 +57,8 @@ public:
 
 public:
 
-	UFUNCTION ( BlueprintCallable , Category = "Default" )
-	void RequestChunkUpdate ( const int32 ComponentIndex , const int32 RegionIndex , const int32 ChunkIndex , const int32 DataIndex , const bool bNotifyNeighbour , const bool bIsolateRegion );
+	UFUNCTION ( BlueprintCallable , meta=(AutoCreateRefTerm="GridDataIndexList") , Category = "Default" )
+	void RequestChunkUpdate ( const int32 ComponentIndex , const TArray < FIntVector >& GridDataIndexList , const bool bIsolateRegion );
 
 protected:
 

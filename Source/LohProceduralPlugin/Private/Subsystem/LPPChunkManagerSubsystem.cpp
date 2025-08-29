@@ -193,40 +193,42 @@ bool ULPPChunkManagerSubsystem::UnloadChunk ( const int32 ComponentIndex , const
 	return false;
 }
 
-void ULPPChunkManagerSubsystem::RequestChunkUpdate ( const int32 ComponentIndex , const int32 RegionIndex , const int32 ChunkIndex , const int32 DataIndex , const bool bNotifyNeighbour , const bool bIsolateRegion )
+void ULPPChunkManagerSubsystem::RequestChunkUpdate ( const int32 ComponentIndex , const TArray < FIntVector >& GridDataIndexList , const bool bIsolateRegion )
 {
 	if ( ComponentIndex <= INDEX_NONE || IsValid ( DataComponentList [ ComponentIndex ] ) == false )
 	{
 		return;
 	}
 
-	const FIntVector ChunkID ( ComponentIndex , RegionIndex , ChunkIndex );
+	TSet < FIntPoint > BroadcastChunkIDList;
 
-	if ( const FLPPLoadedChunkData* LoadedChunkRef = LoadedChunkMap.Find ( ChunkID ) ; LoadedChunkRef != nullptr && IsValid ( LoadedChunkRef->ChunkActor ) )
+	for ( const FIntVector& GridDataIndex : GridDataIndexList )
 	{
-		ILPPChunkActorInterface::Execute_OnRequestChunkUpdate ( LoadedChunkRef->ChunkActor );
+		BroadcastChunkIDList.Add ( FIntPoint ( GridDataIndex.X , GridDataIndex.Y ) );
 
-		const FIntVector DataPos = DataComponentList [ ComponentIndex ]->ToDataGridPosition ( FIntVector ( 0 , 0 , DataIndex ) );
+		const FIntVector DataPos = DataComponentList [ ComponentIndex ]->ToDataGridPosition ( FIntVector ( 0 , 0 , GridDataIndex.Z ) );
 
 		// Send update to any nearby chunk too if loaded
-		if ( bNotifyNeighbour )
+		for ( const FIntVector& GridEdgeDir : ULFPGridLibrary::GetGridEdgeDirection ( DataPos , DataComponentList [ ComponentIndex ]->GetDataGridSize ( ) ) )
 		{
-			for ( const FIntVector& GridEdgeDir : ULFPGridLibrary::GetGridEdgeDirection ( DataPos , DataComponentList [ ComponentIndex ]->GetDataGridSize ( ) ) )
+			const FIntPoint EdgeChunkIndex = DataComponentList [ ComponentIndex ]->AddOffsetToChunkGridIndex ( FIntPoint ( GridDataIndex.X , GridDataIndex.Y ) , GridEdgeDir );
+
+			if ( bIsolateRegion && EdgeChunkIndex.X != GridDataIndex.X )
 			{
-				const FIntPoint EdgeChunkIndex = DataComponentList [ ComponentIndex ]->AddOffsetToChunkGridIndex ( FIntPoint ( RegionIndex , ChunkIndex ) , GridEdgeDir );
-
-				if ( bIsolateRegion && EdgeChunkIndex.X != RegionIndex )
-				{
-					continue;
-				}
-
-				const FIntVector EdgeChunkID ( ComponentIndex , EdgeChunkIndex.X , EdgeChunkIndex.Y );
-
-				if ( const FLPPLoadedChunkData* EdgeChunkRef = LoadedChunkMap.Find ( EdgeChunkID ) ; EdgeChunkRef != nullptr && IsValid ( EdgeChunkRef->ChunkActor ) )
-				{
-					ILPPChunkActorInterface::Execute_OnRequestChunkUpdate ( EdgeChunkRef->ChunkActor );
-				}
+				continue;
 			}
+
+			BroadcastChunkIDList.Add ( EdgeChunkIndex );
+		}
+	}
+
+	for ( const FIntPoint& ChunkID : BroadcastChunkIDList )
+	{
+		const FIntVector EdgeChunkID ( ComponentIndex , ChunkID.X , ChunkID.Y );
+
+		if ( const FLPPLoadedChunkData* EdgeChunkRef = LoadedChunkMap.Find ( EdgeChunkID ) ; EdgeChunkRef != nullptr && IsValid ( EdgeChunkRef->ChunkActor ) )
+		{
+			ILPPChunkActorInterface::Execute_OnRequestChunkUpdate ( EdgeChunkRef->ChunkActor );
 		}
 	}
 }
