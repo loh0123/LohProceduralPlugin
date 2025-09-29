@@ -10,12 +10,28 @@
 #include "Interface/LPPChunkActorInterface.h"
 #include "Math/LFPGridLibrary.h"
 
-void ULPPChunkManagerSubsystem::SetupChunkManager ( const TArray < ULFPGridTagDataComponent* >& NewDataComponentList , const TSubclassOf < AActor > NewChunkActorClass , const FVector& NewSpawnOffset , const FVector& ChunkDataSize )
+void ULPPChunkManagerSubsystem::Tick ( float DeltaTime )
+{
+	for ( int32 LoopActionIndex = 0 ; LoopActionIndex < ActionPreFrame && ActionList.IsEmpty ( ) == false ; ++LoopActionIndex )
+	{
+		ActionList [ 0 ] ( );
+
+		ActionList.RemoveAt ( 0 , EAllowShrinking::No );
+	}
+}
+
+TStatId ULPPChunkManagerSubsystem::GetStatId ( ) const
+{
+	RETURN_QUICK_DECLARE_CYCLE_STAT ( ULoadingScreenManager , STATGROUP_Tickables );
+}
+
+void ULPPChunkManagerSubsystem::SetupChunkManager ( const TArray < ULFPGridTagDataComponent* >& NewDataComponentList , const TSubclassOf < AActor > NewChunkActorClass , const FVector& NewSpawnOffset , const FVector& ChunkDataSize , const int32 NewActionPreFrame )
 {
 	DataComponentList = NewDataComponentList;
 
 	ChunkActorClass = NewChunkActorClass;
 	SpawnOffset     = NewSpawnOffset;
+	ActionPreFrame  = NewActionPreFrame;
 
 	{
 		for ( AActor* AvailableChunkActor : AvailableChunkList )
@@ -132,15 +148,10 @@ AActor* ULPPChunkManagerSubsystem::LoadChunk ( const int32 ComponentIndex , cons
 			LoadedChunkRef.LoaderList.Add ( LoaderActor );
 		}
 
-		// Does the chunk actor we spawn have the correct interface?
-		if ( LoadedChunkRef.ChunkActor->Implements < ULPPChunkActorInterface > ( ) )
+		ActionList.Add ( [=, this] ( )
 		{
-			ILPPChunkActorInterface::Execute_OnChunkIDChanged ( LoadedChunkRef.ChunkActor , DataComponentList [ ComponentIndex ] , RegionIndex , ChunkIndex );
-		}
-		else
-		{
-			UE_LOG ( LogTemp , Error , TEXT ( "ChunkActor ( %s) does not implement ULPPChunkActorInterface" ) , *LoadedChunkRef.ChunkActor->GetName () );
-		}
+			NotifyChunkLoad ( ComponentIndex , RegionIndex , ChunkIndex );
+		} );
 
 		return LoadedChunkRef.ChunkActor;
 	}
@@ -177,11 +188,10 @@ bool ULPPChunkManagerSubsystem::UnloadChunk ( const int32 ComponentIndex , const
 				// This actor can be reuse
 				AvailableChunkList.Add ( LoadedChunkPtr->ChunkActor );
 
-				if ( LoadedChunkPtr->ChunkActor->Implements < ULPPChunkActorInterface > ( ) )
+				ActionList.Add ( [UnloadActor = LoadedChunkPtr->ChunkActor, this] ( )
 				{
-					// Tell the actor the id is invalid now 
-					ILPPChunkActorInterface::Execute_OnChunkIDChanged ( LoadedChunkPtr->ChunkActor , nullptr , INDEX_NONE , INDEX_NONE );
-				}
+					NotifyChunkUnload ( UnloadActor );
+				} );
 			}
 
 			LoadedChunkMap.Remove ( ChunkID );
@@ -224,11 +234,63 @@ void ULPPChunkManagerSubsystem::RequestChunkUpdate ( const int32 ComponentIndex 
 
 	for ( const FIntPoint& ChunkID : BroadcastChunkIDList )
 	{
-		const FIntVector EdgeChunkID ( ComponentIndex , ChunkID.X , ChunkID.Y );
-
-		if ( const FLPPLoadedChunkData* EdgeChunkRef = LoadedChunkMap.Find ( EdgeChunkID ) ; EdgeChunkRef != nullptr && IsValid ( EdgeChunkRef->ChunkActor ) )
+		ActionList.Add ( [=, this] ( )
 		{
-			ILPPChunkActorInterface::Execute_OnRequestChunkUpdate ( EdgeChunkRef->ChunkActor );
+			NotifyChunkUpdate ( ComponentIndex , ChunkID.X , ChunkID.Y );
+		} );
+	}
+}
+
+void ULPPChunkManagerSubsystem::NotifyChunkLoad ( const int32 ComponentIndex , const int32 RegionIndex , const int32 ChunkIndex ) const
+{
+	const FLPPLoadedChunkData* LoadedChunkRef = LoadedChunkMap.Find ( FIntVector ( ComponentIndex , RegionIndex , ChunkIndex ) );
+
+	// Do we have a chunk actor?
+	if ( LoadedChunkRef != nullptr && IsValid ( LoadedChunkRef->ChunkActor ) )
+	{
+		// Does the chunk actor we spawn have the correct interface?
+		if ( LoadedChunkRef->ChunkActor->Implements < ULPPChunkActorInterface > ( ) )
+		{
+			ILPPChunkActorInterface::Execute_OnChunkIDChanged ( LoadedChunkRef->ChunkActor , DataComponentList [ ComponentIndex ] , RegionIndex , ChunkIndex );
+		}
+		else
+		{
+			UE_LOG ( LogTemp , Error , TEXT ( "ChunkActor ( %s) does not implement ULPPChunkActorInterface" ) , *LoadedChunkRef->ChunkActor->GetName () );
+		}
+	}
+}
+
+void ULPPChunkManagerSubsystem::NotifyChunkUnload ( AActor* UnloadActor ) const
+{
+	if ( IsValid ( UnloadActor ) )
+	{
+		// Does the chunk actor we spawn have the correct interface?
+		if ( UnloadActor->Implements < ULPPChunkActorInterface > ( ) )
+		{
+			// Tell the actor the id is invalid now 
+			ILPPChunkActorInterface::Execute_OnChunkIDChanged ( UnloadActor , nullptr , INDEX_NONE , INDEX_NONE );
+		}
+		else
+		{
+			UE_LOG ( LogTemp , Error , TEXT ( "ChunkActor ( %s) does not implement ULPPChunkActorInterface" ) , *UnloadActor->GetName () );
+		}
+	}
+}
+
+void ULPPChunkManagerSubsystem::NotifyChunkUpdate ( const int32 ComponentIndex , const int32 RegionIndex , const int32 ChunkIndex ) const
+{
+	const FIntVector ChunkID ( ComponentIndex , RegionIndex , ChunkIndex );
+
+	if ( const FLPPLoadedChunkData* ChunkRef = LoadedChunkMap.Find ( ChunkID ) ; ChunkRef != nullptr && IsValid ( ChunkRef->ChunkActor ) )
+	{
+		// Does the chunk actor we spawn have the correct interface?
+		if ( ChunkRef->ChunkActor->Implements < ULPPChunkActorInterface > ( ) )
+		{
+			ILPPChunkActorInterface::Execute_OnRequestChunkUpdate ( ChunkRef->ChunkActor );
+		}
+		else
+		{
+			UE_LOG ( LogTemp , Error , TEXT ( "ChunkActor ( %s) does not implement ULPPChunkActorInterface" ) , *ChunkRef->ChunkActor->GetName () );
 		}
 	}
 }

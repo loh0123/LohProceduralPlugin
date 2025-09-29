@@ -6,7 +6,6 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Subsystems/WorldSubsystem.h"
 #include "LPPChunkManagerSubsystem.generated.h"
 
 class ULFPGridTagDataComponent;
@@ -30,14 +29,20 @@ public:
  * 
  */
 UCLASS ( )
-class LOHPROCEDURALPLUGIN_API ULPPChunkManagerSubsystem : public UWorldSubsystem
+class LOHPROCEDURALPLUGIN_API ULPPChunkManagerSubsystem : public UTickableWorldSubsystem
 {
 	GENERATED_BODY ( )
 
 public:
 
+	virtual void Tick ( float DeltaTime ) override;
+
+	virtual TStatId GetStatId ( ) const override;
+
+public:
+
 	UFUNCTION ( BlueprintCallable , Category = "Default" )
-	void SetupChunkManager ( const TArray < ULFPGridTagDataComponent* >& NewDataComponentList , const TSubclassOf < AActor > NewChunkActorClass , const FVector& NewSpawnOffset , const FVector& ChunkDataSize );
+	void SetupChunkManager ( const TArray < ULFPGridTagDataComponent* >& NewDataComponentList , const TSubclassOf < AActor > NewChunkActorClass , const FVector& NewSpawnOffset , const FVector& ChunkDataSize , const int32 NewActionPreFrame );
 
 public:
 
@@ -59,6 +64,17 @@ public:
 
 	UFUNCTION ( BlueprintCallable , meta=(AutoCreateRefTerm="GridDataIndexList") , Category = "Default" )
 	void RequestChunkUpdate ( const int32 ComponentIndex , const TArray < FIntVector >& GridDataIndexList , const bool bIsolateRegion );
+
+protected:
+
+	UFUNCTION ( )
+	void NotifyChunkLoad ( const int32 ComponentIndex , const int32 RegionIndex , const int32 ChunkIndex ) const;
+
+	UFUNCTION ( )
+	void NotifyChunkUnload ( AActor* UnloadActor ) const;
+
+	UFUNCTION ( )
+	void NotifyChunkUpdate ( const int32 ComponentIndex , const int32 RegionIndex , const int32 ChunkIndex ) const;
 
 protected:
 
@@ -89,4 +105,14 @@ protected:
 
 	UPROPERTY ( Transient )
 	FVector SpawnOffset = FVector ( 0.0f , 0.0f , 0.0f );
+
+	UPROPERTY ( Transient )
+	int32 ActionPreFrame = 8;
+
+	UPROPERTY ( Transient )
+	int32 CurrentActionPoint = 0;
+
+private:
+
+	TArray < TFunction < void  ( ) > > ActionList = TArray < TFunction < void  ( ) > > ( );
 };
