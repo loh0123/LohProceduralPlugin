@@ -6,14 +6,23 @@
 void ULPPProceduralWorldSubsystem::Initialize ( FSubsystemCollectionBase& Collection )
 {
 	Super::Initialize ( Collection );
+
+	LastTickTime = 0.0f;
+	TickInterval = 0.0166666665f;
 }
 
 void ULPPProceduralWorldSubsystem::Tick ( float DeltaTime )
 {
 	Super::Tick ( DeltaTime );
 
-	const int32 PreFrame = FMath::Floor ( 1.0f / PreDeltaTime );
-	const int32 JobCount = FMath::Max ( 1 , PreFrame / 10 );
+	const int32 JobCount = FMath::FloorToInt ( LastTickTime / TickInterval );
+
+	LastTickTime += DeltaTime;
+
+	if ( JobCount > 0 )
+	{
+		LastTickTime -= TickInterval * JobCount;
+	}
 
 	for ( int32 JobIndex = 0 ; LazyGameThreadJobQueue.IsEmpty ( ) == false && JobIndex < JobCount ; ++JobIndex )
 	{
@@ -22,8 +31,6 @@ void ULPPProceduralWorldSubsystem::Tick ( float DeltaTime )
 
 		GameThreadJob ( );
 	}
-
-	PreDeltaTime = DeltaTime;
 }
 
 void ULPPProceduralWorldSubsystem::Deinitialize ( )
@@ -43,7 +50,7 @@ void ULPPProceduralWorldSubsystem::Deinitialize ( )
 
 TStatId ULPPProceduralWorldSubsystem::GetStatId ( ) const
 {
-	RETURN_QUICK_DECLARE_CYCLE_STAT ( ULPPMarchingWorldSubsystem , STATGROUP_Tickables );
+	RETURN_QUICK_DECLARE_CYCLE_STAT ( ULPPChunkManagerSubsystem , STATGROUP_Tickables );
 }
 
 TWeakPtr < FMarchingComputeJob > ULPPProceduralWorldSubsystem::LaunchJob ( const TCHAR* DebugName , const TFunction < void  ( FProgressCancel& Progress , TQueue < TFunction < void  ( ) > , EQueueMode::Mpsc >& GameThreadJob ) >& JobWork )

@@ -125,7 +125,7 @@ void FLPPChunkedDynamicMeshProxy::GetDistanceFieldAtlasData ( const class FDista
 	if ( DistanceFieldData.IsValid ( ) )
 	{
 		OutDistanceFieldData = DistanceFieldData.Get ( );
-		SelfShadowBias       = 0.0f;
+		SelfShadowBias       = DFBias;
 	}
 }
 
@@ -383,9 +383,9 @@ void FLPPChunkedDynamicMeshProxy::DrawBatch ( FMeshElementCollector& Collector ,
 	FMeshBatchElement& BatchElement = Mesh.Elements [ 0 ];
 	BatchElement.IndexBuffer        = &IndexBuffer;
 	Mesh.bWireframe                 = bWireframe;
-	Mesh.bDisableBackfaceCulling = bWireframe;		
-	Mesh.VertexFactory       = &RenderBuffers.VertexFactory;
-	Mesh.MaterialRenderProxy = UseMaterial;
+	Mesh.bDisableBackfaceCulling    = bWireframe;
+	Mesh.VertexFactory              = &RenderBuffers.VertexFactory;
+	Mesh.MaterialRenderProxy        = UseMaterial;
 
 	BatchElement.PrimitiveUniformBufferResource = &DynamicPrimitiveUniformBuffer.UniformBuffer;
 

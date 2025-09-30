@@ -261,7 +261,7 @@ void ULPPChunkedDynamicMesh::RebuildPhysicsData ( )
 
 	MeshBodySetup->AbortPhysicsMeshAsyncCreation ( );
 
-	if ( MeshCompactData.Position.Num ( ) > 2 )
+	if ( MeshCompactData.Position.Num ( ) > 2 && bEnableComplexCollision )
 	{
 		MeshBodySetup->CreatePhysicsMeshesAsync ( FOnAsyncPhysicsCookFinished::CreateUObject ( this , &ULPPChunkedDynamicMesh::FinishPhysicsAsyncCook , MeshBodySetup.Get ( ) ) );
 	}
@@ -284,7 +284,7 @@ void ULPPChunkedDynamicMesh::FinishPhysicsAsyncCook ( bool bSuccess , UBodySetup
 {
 	if ( bSuccess )
 	{
-		MeshBodySetup->AggGeom = AggGeom;
+		FinishedBodySetup->AggGeom = AggGeom;
 
 		RecreatePhysicsState ( );
 
@@ -387,7 +387,7 @@ FPrimitiveSceneProxy* ULPPChunkedDynamicMesh::CreateSceneProxy ( )
 	// if this is not always the case, we have made incorrect assumptions
 	ensure ( GetSceneProxy() == nullptr );
 
-	FLPPChunkedDynamicMeshProxy* NewProxy = new FLPPChunkedDynamicMeshProxy ( this );
+	FLPPChunkedDynamicMeshProxy* NewProxy = new FLPPChunkedDynamicMeshProxy ( this , DistanceFieldSelfShadowBias );
 
 	NewProxy->Initialize ( [&] (
 	                      TArray < FVector3f >& PositionList ,

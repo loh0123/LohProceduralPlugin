@@ -147,4 +147,9 @@ protected:
 
 	UPROPERTY ( )
 	FLPPChunkedDynamicCompactMeshData MeshCompactData;
+
+protected:
+
+	UPROPERTY ( EditAnywhere , Category = "Setting" )
+	float DistanceFieldSelfShadowBias = 1.0f;
 };

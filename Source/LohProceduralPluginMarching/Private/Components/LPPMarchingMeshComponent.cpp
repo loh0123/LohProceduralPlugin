@@ -971,6 +971,8 @@ void ULPPMarchingMeshComponent::ComputeNewMarchingMesh_Completed ( TUniquePtr < 
 
 					//UE_LOG ( LogTemp , Warning , TEXT("Marching Data : %s") , *LocalThreadData->MeshData.MeshInfoString ( ) );
 
+					//UE_LOG ( LogTemp , Warning , TEXT("Marching Data Collision : %i") , LocalThreadData->CollisionBoxElems.Num ( ) );
+
 					AggGeom.BoxElems = LocalThreadData->CollisionBoxElems;
 
 					SetMesh ( MoveTemp ( LocalThreadData->MeshData ) );

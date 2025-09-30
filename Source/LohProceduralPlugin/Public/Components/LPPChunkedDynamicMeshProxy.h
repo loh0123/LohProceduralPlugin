@@ -24,13 +24,14 @@ class FLPPChunkedDynamicMeshProxy final : public FPrimitiveSceneProxy
 
 public:
 
-	FLPPChunkedDynamicMeshProxy ( UMeshComponent* Component ) : FPrimitiveSceneProxy ( Component )
-	                                                            , bEnableRaytracing ( true )
-	                                                            , bPreferStaticDrawPath ( true )
-	                                                            , DistanceFieldData ( nullptr )
-	                                                            , MaterialRelevance ( Component->GetMaterialRelevance ( GetScene ( ).GetFeatureLevel ( ) ) )
-	                                                            , ParentComponent ( Component )
-	                                                            , CollisionTraceFlag ( )
+	FLPPChunkedDynamicMeshProxy ( UMeshComponent* Component , const float NewDFBias ) : FPrimitiveSceneProxy ( Component )
+	                                                                                    , bEnableRaytracing ( true )
+	                                                                                    , bPreferStaticDrawPath ( true )
+	                                                                                    , DistanceFieldData ( nullptr )
+	                                                                                    , MaterialRelevance ( Component->GetMaterialRelevance ( GetScene ( ).GetFeatureLevel ( ) ) )
+	                                                                                    , ParentComponent ( Component )
+	                                                                                    , DFBias ( NewDFBias )
+	                                                                                    , CollisionTraceFlag ( )
 	{
 		SetCollisionData ( );
 
@@ -38,9 +39,9 @@ public:
 
 		bVerifyUsedMaterials = true;
 
-		bHasDeformableMesh = false;
+		bHasDeformableMesh                                  = false;
 		bStaticElementsAlwaysUseProxyPrimitiveUniformBuffer = true;
-		bSupportsSortedTriangles = true;
+		bSupportsSortedTriangles                            = true;
 	}
 
 	virtual ~FLPPChunkedDynamicMeshProxy ( ) override
@@ -84,6 +85,8 @@ public:
 
 	/** Component that created this proxy (is there a way to look this up?) */
 	UMeshComponent* ParentComponent;
+
+	float DFBias = 0.0f;
 
 #if UE_ENABLE_DEBUG_DRAWING
 

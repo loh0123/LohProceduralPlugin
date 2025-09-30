@@ -35,6 +35,8 @@ class LOHPROCEDURALPLUGIN_API ULPPChunkManagerSubsystem : public UTickableWorldS
 
 public:
 
+	virtual void Initialize ( FSubsystemCollectionBase& Collection ) override;
+
 	virtual void Tick ( float DeltaTime ) override;
 
 	virtual TStatId GetStatId ( ) const override;
@@ -42,7 +44,7 @@ public:
 public:
 
 	UFUNCTION ( BlueprintCallable , Category = "Default" )
-	void SetupChunkManager ( const TArray < ULFPGridTagDataComponent* >& NewDataComponentList , const TSubclassOf < AActor > NewChunkActorClass , const FVector& NewSpawnOffset , const FVector& ChunkDataSize , const int32 NewActionPreFrame );
+	void SetupChunkManager ( const TArray < ULFPGridTagDataComponent* >& NewDataComponentList , const TSubclassOf < AActor > NewChunkActorClass , const FVector& NewSpawnOffset , const FVector& ChunkDataSize , const int32 NewActionPreSecond );
 
 public:
 
@@ -106,11 +108,13 @@ protected:
 	UPROPERTY ( Transient )
 	FVector SpawnOffset = FVector ( 0.0f , 0.0f , 0.0f );
 
-	UPROPERTY ( Transient )
-	int32 ActionPreFrame = 8;
+protected:
 
 	UPROPERTY ( Transient )
-	int32 CurrentActionPoint = 0;
+	float TickInterval = 0.0f;
+
+	UPROPERTY ( Transient )
+	float LastTickTime = 0.0f;
 
 private:
 

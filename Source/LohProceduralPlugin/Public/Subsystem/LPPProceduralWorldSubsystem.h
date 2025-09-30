@@ -56,7 +56,13 @@ public:
 
 	TArray < TSharedPtr < FMarchingComputeJob > > PendingJobs;
 
-	float PreDeltaTime = 0.001f;
+protected:
+
+	UPROPERTY ( Transient )
+	float TickInterval = 0.0f;
+
+	UPROPERTY ( Transient )
+	float LastTickTime = 0.0f;
 };
 
 struct TAsyncMarchingData

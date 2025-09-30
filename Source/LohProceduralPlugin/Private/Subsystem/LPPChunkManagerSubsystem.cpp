@@ -10,9 +10,25 @@
 #include "Interface/LPPChunkActorInterface.h"
 #include "Math/LFPGridLibrary.h"
 
+void ULPPChunkManagerSubsystem::Initialize ( FSubsystemCollectionBase& Collection )
+{
+	Super::Initialize ( Collection );
+
+	LastTickTime = 0.0f;
+}
+
 void ULPPChunkManagerSubsystem::Tick ( float DeltaTime )
 {
-	for ( int32 LoopActionIndex = 0 ; LoopActionIndex < ActionPreFrame && ActionList.IsEmpty ( ) == false ; ++LoopActionIndex )
+	const int32 JobCount = FMath::FloorToInt ( LastTickTime / TickInterval );
+
+	LastTickTime += DeltaTime;
+
+	if ( JobCount > 0 )
+	{
+		LastTickTime -= TickInterval * JobCount;
+	}
+
+	for ( int32 LoopActionIndex = 0 ; LoopActionIndex < JobCount && ActionList.IsEmpty ( ) == false ; ++LoopActionIndex )
 	{
 		ActionList [ 0 ] ( );
 
@@ -22,16 +38,16 @@ void ULPPChunkManagerSubsystem::Tick ( float DeltaTime )
 
 TStatId ULPPChunkManagerSubsystem::GetStatId ( ) const
 {
-	RETURN_QUICK_DECLARE_CYCLE_STAT ( ULoadingScreenManager , STATGROUP_Tickables );
+	RETURN_QUICK_DECLARE_CYCLE_STAT ( ULPPChunkManagerSubsystem , STATGROUP_Tickables );
 }
 
-void ULPPChunkManagerSubsystem::SetupChunkManager ( const TArray < ULFPGridTagDataComponent* >& NewDataComponentList , const TSubclassOf < AActor > NewChunkActorClass , const FVector& NewSpawnOffset , const FVector& ChunkDataSize , const int32 NewActionPreFrame )
+void ULPPChunkManagerSubsystem::SetupChunkManager ( const TArray < ULFPGridTagDataComponent* >& NewDataComponentList , const TSubclassOf < AActor > NewChunkActorClass , const FVector& NewSpawnOffset , const FVector& ChunkDataSize , const int32 NewActionPreSecond )
 {
 	DataComponentList = NewDataComponentList;
 
 	ChunkActorClass = NewChunkActorClass;
 	SpawnOffset     = NewSpawnOffset;
-	ActionPreFrame  = NewActionPreFrame;
+	TickInterval    = 1.0f / NewActionPreSecond;
 
 	{
 		for ( AActor* AvailableChunkActor : AvailableChunkList )
