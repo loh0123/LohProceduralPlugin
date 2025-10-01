@@ -249,6 +249,8 @@ bool ULPPMarchingMeshComponent::UpdateRender ( )
 
 	PassData.RenderSetting = RenderSetting;
 
+	PassData.DataID = ClearMeshCounter;
+
 	MeshComputeData.LaunchJob ( TEXT ( "MarchingDynamicMeshComponentMeshData" ) ,
 	                            [this, MovedCacheDataList = MoveTemp ( CacheDataList ),MovedPassData = MoveTemp ( PassData )] ( FProgressCancel& Progress , TQueue < TFunction < void  ( ) > , EQueueMode::Mpsc >& GameThreadJob )
 	                            {
@@ -276,6 +278,7 @@ void ULPPMarchingMeshComponent::UpdateDistanceField ( const FDynamicMesh3& ReadM
 		if ( DistanceFieldResolutionScale <= 0.0f || LocalThreadData.IsValid ( ) == false || IsDataComponentValid ( ) == false || MeshCompactData.Position.IsEmpty ( ) )
 		{
 			DistanceFieldComputeData.CancelJob ( );
+			DistanceFieldData.Reset ( );
 
 			return;
 		}
@@ -434,6 +437,7 @@ TUniquePtr < FLFPMarchingThreadData > ULPPMarchingMeshComponent::ComputeNewMarch
 	TUniquePtr < FLFPMarchingThreadData > NewMeshData = MakeUnique < FLFPMarchingThreadData > ( );
 
 	NewMeshData->StartTime = PassData.StartTime;
+	NewMeshData->DataID    = PassData.DataID;
 
 	const FVector& MeshFullSize = PassData.MeshFullSize;
 	const FVector  MeshGapSize  = MeshFullSize;
@@ -949,7 +953,7 @@ void ULPPMarchingMeshComponent::ComputeNewMarchingMesh_Completed ( TUniquePtr < 
 	{
 		bUpdatingThreadData = true;
 
-		GameThreadJob.Enqueue ( [this] ( )
+		GameThreadJob.Enqueue ( [this ] ( )
 		{
 			if ( IsValid ( this ) == false )
 			{
@@ -961,11 +965,7 @@ void ULPPMarchingMeshComponent::ComputeNewMarchingMesh_Completed ( TUniquePtr < 
 			{
 				FScopeLock Lock ( &ThreadDataLock );
 
-				if ( LocalThreadData.IsValid ( ) == false )
-				{
-					ClearMesh ( );
-				}
-				else
+				if ( LocalThreadData.IsValid ( ) && LocalThreadData->DataID == ClearMeshCounter )
 				{
 					//const float CompactMetric = LocalThreadData->MeshData.CompactMetric ( );
 

@@ -45,6 +45,8 @@ void ULPPChunkedDynamicMesh::TickComponent ( float DeltaTime , ELevelTick TickTy
 
 void ULPPChunkedDynamicMesh::SetMesh ( FDynamicMesh3&& MoveMesh )
 {
+	SetMeshCounter += 1;
+
 	MeshCompactData = FLPPChunkedDynamicCompactMeshData ( );
 
 	const FDynamicMesh3 DynamicMeshData = MoveTemp ( MoveMesh );
@@ -142,6 +144,8 @@ void ULPPChunkedDynamicMesh::SetMesh ( FDynamicMesh3&& MoveMesh )
 
 void ULPPChunkedDynamicMesh::ClearMesh ( )
 {
+	ClearMeshCounter += 1;
+
 	MeshCompactData = FLPPChunkedDynamicCompactMeshData ( );
 
 	InvalidatePhysicsData ( );
@@ -345,7 +349,7 @@ void ULPPChunkedDynamicMesh::SetMaterial ( int32 ElementIndex , UMaterialInterfa
 	// PrecachePSOs(); // indirectly calls GetUsedMaterials, requires CollectPSOPrecacheData to be implemented, see UStaticMeshComponent for example
 
 
-	MarkRenderStateDirty ( );
+	NotifyMaterialSetUpdated ( );
 
 	// update the body instance in case this material has an associated physics material 
 	FBodyInstance* BodyInst = GetBodyInstance ( );

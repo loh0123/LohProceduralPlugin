@@ -91,6 +91,12 @@ protected:
 	UPROPERTY ( Transient )
 	TObjectPtr < UBodySetup > MeshBodySetup;
 
+	UPROPERTY ( Transient )
+	uint16 SetMeshCounter = 0;
+
+	UPROPERTY ( Transient )
+	uint16 ClearMeshCounter = 0;
+
 protected:
 
 	UPROPERTY ( EditAnywhere , Category = "Setting" )

@@ -89,6 +89,8 @@ public:
 
 	FDateTime StartTime = FDateTime ( );
 
+	uint16 DataID = 0;
+
 public:
 
 	UPROPERTY ( )
@@ -101,6 +103,8 @@ struct FLFPMarchingThreadData
 	GENERATED_BODY ( )
 
 public:
+
+	uint16 DataID = 0;
 
 	FDynamicMesh3 MeshData = FDynamicMesh3 ( );
 

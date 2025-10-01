@@ -22,11 +22,7 @@ void ULPPChunkManagerSubsystem::Tick ( float DeltaTime )
 	const int32 JobCount = FMath::FloorToInt ( LastTickTime / TickInterval );
 
 	LastTickTime += DeltaTime;
-
-	if ( JobCount > 0 )
-	{
-		LastTickTime -= TickInterval * JobCount;
-	}
+	LastTickTime -= TickInterval * JobCount;
 
 	for ( int32 LoopActionIndex = 0 ; LoopActionIndex < JobCount && ActionList.IsEmpty ( ) == false ; ++LoopActionIndex )
 	{

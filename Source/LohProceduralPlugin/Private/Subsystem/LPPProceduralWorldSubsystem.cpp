@@ -18,18 +18,12 @@ void ULPPProceduralWorldSubsystem::Tick ( float DeltaTime )
 	const int32 JobCount = FMath::FloorToInt ( LastTickTime / TickInterval );
 
 	LastTickTime += DeltaTime;
-
-	if ( JobCount > 0 )
-	{
-		LastTickTime -= TickInterval * JobCount;
-	}
+	LastTickTime -= TickInterval * JobCount;
 
 	for ( int32 JobIndex = 0 ; LazyGameThreadJobQueue.IsEmpty ( ) == false && JobIndex < JobCount ; ++JobIndex )
 	{
-		TFunction < void  ( ) > GameThreadJob;
-		LazyGameThreadJobQueue.Dequeue ( GameThreadJob );
-
-		GameThreadJob ( );
+		( *LazyGameThreadJobQueue.Peek ( ) ) ( );
+		LazyGameThreadJobQueue.Pop ( );
 	}
 }
 
