@@ -13,23 +13,16 @@
 void ULPPChunkManagerSubsystem::Initialize ( FSubsystemCollectionBase& Collection )
 {
 	Super::Initialize ( Collection );
-
-	LastTickTime = 0.0f;
 }
 
 void ULPPChunkManagerSubsystem::Tick ( float DeltaTime )
 {
-	const int32 JobCount = FMath::FloorToInt ( LastTickTime / TickInterval );
-
-	LastTickTime += DeltaTime;
-	LastTickTime -= TickInterval * JobCount;
-
-	for ( int32 LoopActionIndex = 0 ; LoopActionIndex < JobCount && ActionList.IsEmpty ( ) == false ; ++LoopActionIndex )
+	for ( auto& ActionData : BatchUpdateList )
 	{
-		ActionList [ 0 ] ( );
-
-		ActionList.RemoveAt ( 0 , EAllowShrinking::No );
+		NotifyChunkUpdate ( ActionData.Key.X , ActionData.Key.Y , ActionData.Key.Z , ActionData.Value.UpdateDataIndexList.Array ( ) );
 	}
+
+	BatchUpdateList.Reset ( );
 }
 
 TStatId ULPPChunkManagerSubsystem::GetStatId ( ) const
@@ -37,13 +30,12 @@ TStatId ULPPChunkManagerSubsystem::GetStatId ( ) const
 	RETURN_QUICK_DECLARE_CYCLE_STAT ( ULPPChunkManagerSubsystem , STATGROUP_Tickables );
 }
 
-void ULPPChunkManagerSubsystem::SetupChunkManager ( const TArray < ULFPGridTagDataComponent* >& NewDataComponentList , const TSubclassOf < AActor > NewChunkActorClass , const FVector& NewSpawnOffset , const FVector& ChunkDataSize , const int32 NewActionPreSecond )
+void ULPPChunkManagerSubsystem::SetupChunkManager ( const TArray < ULFPGridTagDataComponent* >& NewDataComponentList , const TSubclassOf < AActor > NewChunkActorClass , const FVector& NewSpawnOffset , const FVector& ChunkDataSize )
 {
 	DataComponentList = NewDataComponentList;
 
 	ChunkActorClass = NewChunkActorClass;
 	SpawnOffset     = NewSpawnOffset;
-	TickInterval    = 1.0f / NewActionPreSecond;
 
 	{
 		for ( AActor* AvailableChunkActor : AvailableChunkList )
@@ -160,10 +152,7 @@ AActor* ULPPChunkManagerSubsystem::LoadChunk ( const int32 ComponentIndex , cons
 			LoadedChunkRef.LoaderList.Add ( LoaderActor );
 		}
 
-		ActionList.Add ( [=, this] ( )
-		{
-			NotifyChunkLoad ( ComponentIndex , RegionIndex , ChunkIndex );
-		} );
+		NotifyChunkLoad ( ComponentIndex , RegionIndex , ChunkIndex );
 
 		return LoadedChunkRef.ChunkActor;
 	}
@@ -200,10 +189,7 @@ bool ULPPChunkManagerSubsystem::UnloadChunk ( const int32 ComponentIndex , const
 				// This actor can be reuse
 				AvailableChunkList.Add ( LoadedChunkPtr->ChunkActor );
 
-				ActionList.Add ( [UnloadActor = LoadedChunkPtr->ChunkActor, this] ( )
-				{
-					NotifyChunkUnload ( UnloadActor );
-				} );
+				NotifyChunkUnload ( LoadedChunkPtr->ChunkActor );
 			}
 
 			LoadedChunkMap.Remove ( ChunkID );
@@ -222,11 +208,11 @@ void ULPPChunkManagerSubsystem::RequestChunkUpdate ( const int32 ComponentIndex 
 		return;
 	}
 
-	TSet < FIntPoint > BroadcastChunkIDList;
+	TMap < FIntPoint , TSet < int32 > > BroadcastChunkIDList;
 
 	for ( const FIntVector& GridDataIndex : GridDataIndexList )
 	{
-		BroadcastChunkIDList.Add ( FIntPoint ( GridDataIndex.X , GridDataIndex.Y ) );
+		BroadcastChunkIDList.FindOrAdd ( FIntPoint ( GridDataIndex.X , GridDataIndex.Y ) ).Add ( GridDataIndex.Z );
 
 		const FIntVector DataPos = DataComponentList [ ComponentIndex ]->ToDataGridPosition ( FIntVector ( 0 , 0 , GridDataIndex.Z ) );
 
@@ -240,16 +226,14 @@ void ULPPChunkManagerSubsystem::RequestChunkUpdate ( const int32 ComponentIndex 
 				continue;
 			}
 
-			BroadcastChunkIDList.Add ( EdgeChunkIndex );
+			BroadcastChunkIDList.FindOrAdd ( EdgeChunkIndex );
 		}
 	}
-
-	for ( const FIntPoint& ChunkID : BroadcastChunkIDList )
+	for ( const TPair < FIntPoint , TSet < int32 > >& ChunkID : BroadcastChunkIDList )
 	{
-		ActionList.Add ( [=, this] ( )
-		{
-			NotifyChunkUpdate ( ComponentIndex , ChunkID.X , ChunkID.Y );
-		} );
+		auto& ActionData = BatchUpdateList.FindOrAdd ( FIntVector ( ComponentIndex , ChunkID.Key.X , ChunkID.Key.Y ) );
+
+		ActionData.UpdateDataIndexList.Append ( ChunkID.Value );
 	}
 }
 
@@ -289,7 +273,7 @@ void ULPPChunkManagerSubsystem::NotifyChunkUnload ( AActor* UnloadActor ) const
 	}
 }
 
-void ULPPChunkManagerSubsystem::NotifyChunkUpdate ( const int32 ComponentIndex , const int32 RegionIndex , const int32 ChunkIndex ) const
+void ULPPChunkManagerSubsystem::NotifyChunkUpdate ( const int32 ComponentIndex , const int32 RegionIndex , const int32 ChunkIndex , const TArray < int32 >& DataIndexList ) const
 {
 	const FIntVector ChunkID ( ComponentIndex , RegionIndex , ChunkIndex );
 
@@ -298,7 +282,7 @@ void ULPPChunkManagerSubsystem::NotifyChunkUpdate ( const int32 ComponentIndex ,
 		// Does the chunk actor we spawn have the correct interface?
 		if ( ChunkRef->ChunkActor->Implements < ULPPChunkActorInterface > ( ) )
 		{
-			ILPPChunkActorInterface::Execute_OnRequestChunkUpdate ( ChunkRef->ChunkActor );
+			ILPPChunkActorInterface::Execute_OnRequestChunkUpdate ( ChunkRef->ChunkActor , DataIndexList );
 		}
 		else
 		{

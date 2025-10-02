@@ -42,9 +42,9 @@ public:
 	};
 
 	UFUNCTION ( BlueprintNativeEvent , Category=Default )
-	void OnRequestChunkUpdate ( );
+	void OnRequestChunkUpdate ( const TArray < int32 >& DataIndexList );
 
-	virtual void OnRequestChunkUpdate_Implementation ( )
+	virtual void OnRequestChunkUpdate_Implementation ( const TArray < int32 >& DataIndexList )
 	{
 	};
 };

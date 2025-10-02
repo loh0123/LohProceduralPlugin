@@ -25,6 +25,17 @@ public:
 	TArray < TObjectPtr < AActor > > LoaderList = TArray < TObjectPtr < AActor > > ( );
 };
 
+USTRUCT ( )
+struct FLPPAsyncChunkManagerAction
+{
+	GENERATED_BODY ( )
+
+public:
+
+	UPROPERTY ( )
+	TSet < int32 > UpdateDataIndexList = TSet < int32 > ( );
+};
+
 /**
  * 
  */
@@ -44,7 +55,7 @@ public:
 public:
 
 	UFUNCTION ( BlueprintCallable , Category = "Default" )
-	void SetupChunkManager ( const TArray < ULFPGridTagDataComponent* >& NewDataComponentList , const TSubclassOf < AActor > NewChunkActorClass , const FVector& NewSpawnOffset , const FVector& ChunkDataSize , const int32 NewActionPreSecond );
+	void SetupChunkManager ( const TArray < ULFPGridTagDataComponent* >& NewDataComponentList , const TSubclassOf < AActor > NewChunkActorClass , const FVector& NewSpawnOffset , const FVector& ChunkDataSize );
 
 public:
 
@@ -76,7 +87,7 @@ protected:
 	void NotifyChunkUnload ( AActor* UnloadActor ) const;
 
 	UFUNCTION ( )
-	void NotifyChunkUpdate ( const int32 ComponentIndex , const int32 RegionIndex , const int32 ChunkIndex ) const;
+	void NotifyChunkUpdate ( const int32 ComponentIndex , const int32 RegionIndex , const int32 ChunkIndex , const TArray < int32 >& DataIndexList ) const;
 
 protected:
 
@@ -108,15 +119,8 @@ protected:
 	UPROPERTY ( Transient )
 	FVector SpawnOffset = FVector ( 0.0f , 0.0f , 0.0f );
 
-protected:
-
-	UPROPERTY ( Transient )
-	float TickInterval = 0.0f;
-
-	UPROPERTY ( Transient )
-	float LastTickTime = 0.0f;
-
 private:
 
-	TArray < TFunction < void  ( ) > > ActionList = TArray < TFunction < void  ( ) > > ( );
+	UPROPERTY ( Transient )
+	TMap < FIntVector , FLPPAsyncChunkManagerAction > BatchUpdateList = TMap < FIntVector , FLPPAsyncChunkManagerAction > ( );
 };
