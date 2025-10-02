@@ -122,5 +122,8 @@ protected:
 private:
 
 	UPROPERTY ( Transient )
+	TArray < FIntVector > AsyncLoadChunk = TArray < FIntVector > ( );
+
+	UPROPERTY ( Transient )
 	TMap < FIntVector , FLPPAsyncChunkManagerAction > BatchUpdateList = TMap < FIntVector , FLPPAsyncChunkManagerAction > ( );
 };

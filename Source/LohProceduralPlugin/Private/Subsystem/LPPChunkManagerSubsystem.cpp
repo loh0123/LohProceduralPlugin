@@ -17,6 +17,13 @@ void ULPPChunkManagerSubsystem::Initialize ( FSubsystemCollectionBase& Collectio
 
 void ULPPChunkManagerSubsystem::Tick ( float DeltaTime )
 {
+	for ( int32 LoadIndex = 0 ; LoadIndex < 8 && AsyncLoadChunk.IsEmpty ( ) == false ; ++LoadIndex )
+	{
+		const FIntVector ChunkIndex = AsyncLoadChunk.Pop ( EAllowShrinking::No );
+
+		NotifyChunkLoad ( ChunkIndex.X , ChunkIndex.Y , ChunkIndex.Z );
+	}
+
 	for ( auto& ActionData : BatchUpdateList )
 	{
 		NotifyChunkUpdate ( ActionData.Key.X , ActionData.Key.Y , ActionData.Key.Z , ActionData.Value.UpdateDataIndexList.Array ( ) );
@@ -150,9 +157,14 @@ AActor* ULPPChunkManagerSubsystem::LoadChunk ( const int32 ComponentIndex , cons
 		else
 		{
 			LoadedChunkRef.LoaderList.Add ( LoaderActor );
+
+			if ( LoadedChunkRef.LoaderList.Num ( ) == 1 )
+			{
+				AsyncLoadChunk.Add ( FIntVector ( ComponentIndex , RegionIndex , ChunkIndex ) );
+			}
 		}
 
-		NotifyChunkLoad ( ComponentIndex , RegionIndex , ChunkIndex );
+		//NotifyChunkLoad ( ComponentIndex , RegionIndex , ChunkIndex );
 
 		return LoadedChunkRef.ChunkActor;
 	}
@@ -189,7 +201,16 @@ bool ULPPChunkManagerSubsystem::UnloadChunk ( const int32 ComponentIndex , const
 				// This actor can be reuse
 				AvailableChunkList.Add ( LoadedChunkPtr->ChunkActor );
 
-				NotifyChunkUnload ( LoadedChunkPtr->ChunkActor );
+				const int32 LoadListIndex = AsyncLoadChunk.IndexOfByKey ( FIntVector ( ComponentIndex , RegionIndex , ChunkIndex ) );
+
+				if ( LoadListIndex != INDEX_NONE )
+				{
+					AsyncLoadChunk.RemoveAt ( LoadListIndex );
+				}
+				else
+				{
+					NotifyChunkUnload ( LoadedChunkPtr->ChunkActor );
+				}
 			}
 
 			LoadedChunkMap.Remove ( ChunkID );
