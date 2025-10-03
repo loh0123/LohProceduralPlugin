@@ -7,7 +7,7 @@
 #include "Util/ProgressCancel.h"
 #include "LPPProceduralWorldSubsystem.generated.h"
 
-struct FMarchingComputeJob
+struct FProceduralWorldComputeJob
 {
 	UE::Tasks::FTask               Task;
 	TUniquePtr < FProgressCancel > Progress      = nullptr;
@@ -40,11 +40,11 @@ public:
 
 public:
 
-	TWeakPtr < FMarchingComputeJob > LaunchJob ( const TCHAR* DebugName , const TFunction < void  ( FProgressCancel& Progress , TQueue < TFunction < void  ( ) > , EQueueMode::Mpsc >& GameThreadJob ) >& JobWork );
+	TWeakPtr < FProceduralWorldComputeJob > LaunchJob ( const TCHAR* DebugName , const TFunction < void  ( FProgressCancel& Progress , TQueue < TFunction < void  ( ) > , EQueueMode::Mpsc >& GameThreadJob ) >& JobWork );
 
 protected:
 
-	FORCEINLINE UE::Tasks::FTask LaunchJobInternal ( FMarchingComputeJob* JobPtr );
+	FORCEINLINE UE::Tasks::FTask LaunchJobInternal ( FProceduralWorldComputeJob* JobPtr );
 
 public:
 
@@ -54,7 +54,7 @@ public:
 
 	bool bIsShuttingDown = false;
 
-	TArray < TSharedPtr < FMarchingComputeJob > > PendingJobs;
+	TArray < TSharedPtr < FProceduralWorldComputeJob > > PendingJobs;
 
 protected:
 
@@ -75,15 +75,17 @@ struct TAsyncMarchingData
 	{
 		if ( LastPendingJobs.IsValid ( ) )
 		{
-			TSharedPtr < FMarchingComputeJob > LastJob = LastPendingJobs.Pin ( );
-			LastJob->bCancelled                        = true;
+			TSharedPtr < FProceduralWorldComputeJob > LastJob = LastPendingJobs.Pin ( );
+			LastJob->bCancelled                               = true;
 			UE::Tasks::Wait ( { LastJob->Task } );
 		}
 	}
 
-	TWeakPtr < FMarchingComputeJob > LastPendingJobs = nullptr;
+	TWeakPtr < FProceduralWorldComputeJob > LastPendingJobs = nullptr;
 
 	TWeakObjectPtr < UObject > Outer = nullptr;
+
+	FTimerHandle TaskDelayHandler = FTimerHandle ( );
 
 	FORCEINLINE void CancelJob ( )
 	{
