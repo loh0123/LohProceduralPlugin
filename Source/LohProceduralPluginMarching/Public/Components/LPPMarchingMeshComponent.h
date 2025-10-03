@@ -202,6 +202,9 @@ protected:
 	UPROPERTY ( EditDefaultsOnly , Category="Setting|DistanceField" )
 	float DistanceFieldResolutionScale = 1.0f;
 
+	UPROPERTY ( EditDefaultsOnly , Category="Setting|DistanceField" )
+	float DistanceFieldBatchTime = 1.0f;
+
 protected:
 
 	UPROPERTY ( Transient )
@@ -281,6 +284,8 @@ private:
 private:
 
 	std::atomic < bool > bUpdatingDistanceFieldData = false;
+
+	FTimerHandle DistanceFieldBatchHandler;
 
 	FCriticalSection DistanceFieldDataLock;
 

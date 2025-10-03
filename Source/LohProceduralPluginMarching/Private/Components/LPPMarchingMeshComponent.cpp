@@ -284,7 +284,7 @@ void ULPPMarchingMeshComponent::UpdateDistanceField ( const FDynamicMesh3& ReadM
 		}
 	}
 
-	OnDistanceFieldRebuilding.Broadcast ( this );
+	GetWorld ( )->GetTimerManager ( ).ClearTimer ( DistanceFieldBatchHandler );
 
 	// For safety, run the distance field compute on a (geometry-only) copy of the mesh
 	FDynamicMesh3 GeoOnlyCopy;
@@ -294,88 +294,114 @@ void ULPPMarchingMeshComponent::UpdateDistanceField ( const FDynamicMesh3& ReadM
 
 	GeoOnlyCopy.Copy ( ReadMesh , false , false , false , false );
 
-
-	// Fill Mesh Hole
+	GetWorld ( )->GetTimerManager ( ).SetTimer ( DistanceFieldBatchHandler , [this , GeoOnlyCopy , bMostlyTwoSided] ( ) mutable
 	{
-		const FIntVector& DataSize = GetDataSize ( );
-
-		const int32 DataNum = GetDataNum ( );
-
-		const FVector MeshFullSize = GetMeshSize ( );
-		const FVector MeshHalfSize = MeshFullSize * 0.5f;
-
-		const FVector MeshBoundFullSize = MeshFullSize * FVector ( DataSize );
-		const FVector MeshBoundHalfSize = MeshBoundFullSize * 0.5f;
-
-		const auto& CreateFace = [&] ( const int32& VoxelIndex , const int32& RotationID )
+		if ( IsValid ( this ) == false )
 		{
-			const FIntVector         VoxelGridPos                  = ULFPGridLibrary::ToGridLocation ( VoxelIndex , DataSize );
-			const FVector            CenterPos                     = ( FVector ( VoxelGridPos ) + 0.5f ) * MeshFullSize;
-			const FRotator           Rotation                      = LFPMarchingRenderConstantData::VertexRotationList [ RotationID ];
-			const TArray < FVector > FaceVertexList                = ULFPRenderLibrary::CreateVertexPosList ( CenterPos , Rotation , MeshHalfSize );
-			const FVector            FaceVertexPosList [ 2 ] [ 3 ] =
+			return;
+		}
+
+		if ( bGenerateDistanceField == false )
+		{
+			return;
+		}
+
+		{
+			FScopeLock Lock ( &ThreadDataLock );
+
+			if ( DistanceFieldResolutionScale <= 0.0f || LocalThreadData.IsValid ( ) == false || IsDataComponentValid ( ) == false || MeshCompactData.Position.IsEmpty ( ) )
 			{
+				DistanceFieldComputeData.CancelJob ( );
+				DistanceFieldData.Reset ( );
+
+				return;
+			}
+		}
+
+		OnDistanceFieldRebuilding.Broadcast ( this );
+
+		// Fill Mesh Hole
+		{
+			const FIntVector& DataSize = GetDataSize ( );
+
+			const int32 DataNum = GetDataNum ( );
+
+			const FVector MeshFullSize = GetMeshSize ( );
+			const FVector MeshHalfSize = MeshFullSize * 0.5f;
+
+			const FVector MeshBoundFullSize = MeshFullSize * FVector ( DataSize );
+			const FVector MeshBoundHalfSize = MeshBoundFullSize * 0.5f;
+
+			const auto& CreateFace = [&] ( const int32& VoxelIndex , const int32& RotationID )
+			{
+				const FIntVector         VoxelGridPos                  = ULFPGridLibrary::ToGridLocation ( VoxelIndex , DataSize );
+				const FVector            CenterPos                     = ( FVector ( VoxelGridPos ) + 0.5f ) * MeshFullSize;
+				const FRotator           Rotation                      = LFPMarchingRenderConstantData::VertexRotationList [ RotationID ];
+				const TArray < FVector > FaceVertexList                = ULFPRenderLibrary::CreateVertexPosList ( CenterPos , Rotation , MeshHalfSize );
+				const FVector            FaceVertexPosList [ 2 ] [ 3 ] =
 				{
-					FaceVertexList [ 1 ] , FaceVertexList [ 0 ] , FaceVertexList [ 3 ]
-				} ,
+					{
+						FaceVertexList [ 1 ] , FaceVertexList [ 0 ] , FaceVertexList [ 3 ]
+					} ,
+					{
+						FaceVertexList [ 2 ] , FaceVertexList [ 3 ] , FaceVertexList [ 0 ]
+					}
+				};
+
+				for ( int32 FaceIndex = 0 ; FaceIndex < 2 ; ++FaceIndex )
 				{
-					FaceVertexList [ 2 ] , FaceVertexList [ 3 ] , FaceVertexList [ 0 ]
+					FIntVector FaceVertexIndexList;
+
+					for ( int32 FaceVertexIndex = 0 ; FaceVertexIndex < 3 ; ++FaceVertexIndex )
+					{
+						const FVector& FaceVertexPos = FaceVertexPosList [ FaceIndex ] [ FaceVertexIndex ] - MeshBoundHalfSize;
+
+						FaceVertexIndexList [ FaceVertexIndex ] = GeoOnlyCopy.AppendVertex ( FaceVertexPos );
+					}
+
+					GeoOnlyCopy.AppendTriangle ( FaceVertexIndexList );
 				}
 			};
 
-			for ( int32 FaceIndex = 0 ; FaceIndex < 2 ; ++FaceIndex )
+			/* Generate Voxel Mesh Data */
+			for ( int32 DataIndex = 0 ; DataIndex < DataNum ; ++DataIndex )
 			{
-				FIntVector FaceVertexIndexList;
+				const FIntVector VoxelPos       = ULFPGridLibrary::ToGridLocation ( DataIndex , DataSize );
+				const FIntVector VoxelDataIndex = DataComponent->AddOffsetToDataGridIndex ( FIntVector ( RegionIndex , ChunkIndex , 0 ) , VoxelPos );
 
-				for ( int32 FaceVertexIndex = 0 ; FaceVertexIndex < 3 ; ++FaceVertexIndex )
+				const FGameplayTag& SelfVoxelTag = DataComponent->GetDataTag ( VoxelDataIndex.X , VoxelDataIndex.Y , VoxelDataIndex.Z );
+
+				if ( SelfVoxelTag.MatchesTag ( HandleTag ) )
 				{
-					const FVector& FaceVertexPos = FaceVertexPosList [ FaceIndex ] [ FaceVertexIndex ] - MeshBoundHalfSize;
-
-					FaceVertexIndexList [ FaceVertexIndex ] = GeoOnlyCopy.AppendVertex ( FaceVertexPos );
-				}
-
-				GeoOnlyCopy.AppendTriangle ( FaceVertexIndexList );
-			}
-		};
-
-		/* Generate Voxel Mesh Data */
-		for ( int32 DataIndex = 0 ; DataIndex < DataNum ; ++DataIndex )
-		{
-			const FIntVector VoxelPos       = ULFPGridLibrary::ToGridLocation ( DataIndex , DataSize );
-			const FIntVector VoxelDataIndex = DataComponent->AddOffsetToDataGridIndex ( FIntVector ( RegionIndex , ChunkIndex , 0 ) , VoxelPos );
-
-			const FGameplayTag& SelfVoxelTag = DataComponent->GetDataTag ( VoxelDataIndex.X , VoxelDataIndex.Y , VoxelDataIndex.Z );
-
-			if ( SelfVoxelTag.MatchesTag ( HandleTag ) )
-			{
-				for ( int32 FaceDirectionIndex = 0 ; FaceDirectionIndex < 6 ; ++FaceDirectionIndex )
-				{
-					const FIntVector& TargetIndex = DataComponent->AddOffsetToDataGridIndex ( VoxelDataIndex , LFPMarchingRenderConstantData::FaceDirection [ FaceDirectionIndex ].Up );
-
-					const bool bForceRender = ULFPGridLibrary::IsGridLocationValid ( VoxelPos + LFPMarchingRenderConstantData::FaceDirection [ FaceDirectionIndex ].Up , DataSize ) == false;
-
-					const bool TargetVoxelValid = TargetIndex.GetMin ( ) != INDEX_NONE && DataComponent->GetDataTag ( TargetIndex.X , TargetIndex.Y , TargetIndex.Z ).MatchesTag ( HandleTag );
-
-					// Check Is Border
-					if ( bForceRender && TargetVoxelValid )
+					for ( int32 FaceDirectionIndex = 0 ; FaceDirectionIndex < 6 ; ++FaceDirectionIndex )
 					{
-						CreateFace ( DataIndex , FaceDirectionIndex );
+						const FIntVector& TargetIndex = DataComponent->AddOffsetToDataGridIndex ( VoxelDataIndex , LFPMarchingRenderConstantData::FaceDirection [ FaceDirectionIndex ].Up );
+
+						const bool bForceRender = ULFPGridLibrary::IsGridLocationValid ( VoxelPos + LFPMarchingRenderConstantData::FaceDirection [ FaceDirectionIndex ].Up , DataSize ) == false;
+
+						const bool TargetVoxelValid = TargetIndex.GetMin ( ) != INDEX_NONE && DataComponent->GetDataTag ( TargetIndex.X , TargetIndex.Y , TargetIndex.Z ).MatchesTag ( HandleTag );
+
+						// Check Is Border
+						if ( bForceRender && TargetVoxelValid )
+						{
+							CreateFace ( DataIndex , FaceDirectionIndex );
+						}
 					}
 				}
 			}
 		}
-	}
 
-	DistanceFieldComputeData.LaunchJob ( TEXT ( "MarchingDynamicMeshComponentDistanceField" ) ,
-	                                     [this,MovedGeoOnlyCopy = MoveTemp ( GeoOnlyCopy ), CurrentDistanceFieldResolutionScale = DistanceFieldResolutionScale, bMostlyTwoSided] ( FProgressCancel& Progress , TQueue < TFunction < void  ( ) > , EQueueMode::Mpsc >& GameThreadJob )
-	                                     {
-		                                     TUniquePtr < FDistanceFieldVolumeData > ThreadData = ComputeNewDistanceField_TaskFunctionV2 ( Progress , MovedGeoOnlyCopy , bMostlyTwoSided , CurrentDistanceFieldResolutionScale );
-
-		                                     if ( Progress.Cancelled ( ) == false )
+		DistanceFieldComputeData.LaunchJob ( TEXT ( "MarchingDynamicMeshComponentDistanceField" ) ,
+		                                     [this,MovedGeoOnlyCopy = MoveTemp ( GeoOnlyCopy ), CurrentDistanceFieldResolutionScale = DistanceFieldResolutionScale, bMostlyTwoSided] ( FProgressCancel& Progress , TQueue < TFunction < void  ( ) > , EQueueMode::Mpsc >& GameThreadJob )
 		                                     {
-			                                     ComputeNewDistanceFieldData_Completed ( MoveTemp ( ThreadData ) , GameThreadJob );
-		                                     }
-	                                     } );
+			                                     TUniquePtr < FDistanceFieldVolumeData > ThreadData = ComputeNewDistanceField_TaskFunctionV2 ( Progress , MovedGeoOnlyCopy , bMostlyTwoSided , CurrentDistanceFieldResolutionScale );
+
+			                                     if ( Progress.Cancelled ( ) == false )
+			                                     {
+				                                     ComputeNewDistanceFieldData_Completed ( MoveTemp ( ThreadData ) , GameThreadJob );
+			                                     }
+		                                     } );
+	} , DistanceFieldBatchTime , false );
 }
 
 FPrimitiveSceneProxy* ULPPMarchingMeshComponent::CreateSceneProxy ( )
