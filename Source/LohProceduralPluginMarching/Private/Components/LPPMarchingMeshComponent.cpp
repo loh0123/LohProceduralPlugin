@@ -9,11 +9,12 @@
 #include "MeshAdapterTransforms.h"
 #include "MeshCardBuild.h"
 #include "MeshSimplification.h"
+#include "Components/LFPChunkedGridPositionComponent.h"
 #include "Components/LFPChunkedTagDataComponent.h"
-#include "Components/LFPGridTagDataComponent.h"
 #include "Components/LPPChunkedDynamicMeshProxy.h"
 #include "Data/LPPMarchingData.h"
 #include "DynamicMesh/DynamicMeshAABBTree3.h"
+#include "DynamicMesh/MeshNormals.h"
 #include "DynamicMesh/Operations/MergeCoincidentMeshEdges.h"
 #include "Generators/MinimalBoxMeshGenerator.h"
 #include "Library/LPPMarchingFunctionLibrary.h"
@@ -24,6 +25,8 @@
 #include "Runtime/GeometryFramework/Private/Components/DynamicMeshSceneProxy.h"
 #include "Spatial/FastWinding.h"
 #include "Windows/WindowsSemaphore.h"
+
+LLM_DEFINE_TAG ( LFPMarchingMesh );
 
 // Sets default values for this component's properties
 ULPPMarchingMeshComponent::ULPPMarchingMeshComponent ( )
@@ -60,7 +63,7 @@ FIntVector ULPPMarchingMeshComponent::GetDataSize ( ) const
 {
 	if ( IsDataComponentValid ( ) )
 	{
-		return DataComponent->GetDataGridSize ( );
+		return PositionComponent->GetDataGridSize ( );
 	}
 
 	return FIntVector::NoneValue;
@@ -90,7 +93,7 @@ FVector ULPPMarchingMeshComponent::GetMeshSize ( ) const
 
 bool ULPPMarchingMeshComponent::IsDataComponentValid ( ) const
 {
-	return IsValid ( GetWorld ( ) ) && IsValid ( DataComponent ) && IsValid ( RenderSetting ) && DataComponent->IsChunkIndexValid ( RegionIndex , ChunkIndex );
+	return IsValid ( GetWorld ( ) ) && IsValid ( DataComponent ) && IsValid ( PositionComponent ) && IsValid ( RenderSetting ) && DataComponent->IsChunkIndexValid ( RegionIndex , ChunkIndex );
 }
 
 void ULPPMarchingMeshComponent::GetFaceCullingSetting ( bool& bIsChunkFaceCullingDisable , bool& bIsRegionFaceCullingDisable ) const
@@ -114,7 +117,7 @@ uint8 ULPPMarchingMeshComponent::GetMarchingID ( const FIntVector& Offset ) cons
 		for ( int32 MarchingIndex = 0 ; MarchingIndex < 8 ; ++MarchingIndex )
 		{
 			const FIntVector   MarchingOffset = ULFPGridLibrary::ToGridLocation ( MarchingIndex , FIntVector ( 2 ) );
-			const FIntVector   DataIndex      = DataComponent->AddOffsetToDataGridIndex ( FIntVector ( RegionIndex , ChunkIndex , 0 ) , Offset + MarchingOffset );
+			const FIntVector   DataIndex      = PositionComponent->AddOffsetToDataGridIndex ( FIntVector ( RegionIndex , ChunkIndex , 0 ) , Offset + MarchingOffset );
 			const FGameplayTag DataTag        = DataComponent->GetDataTag ( DataIndex.X , DataIndex.Y , DataIndex.Z );
 
 			if ( DataTag.MatchesTag ( HandleTag ) )
@@ -129,16 +132,17 @@ uint8 ULPPMarchingMeshComponent::GetMarchingID ( const FIntVector& Offset ) cons
 	return 0;
 }
 
-void ULPPMarchingMeshComponent::Initialize ( ULFPGridTagDataComponent* NewDataComponent , const int32 NewRegionIndex , const int32 NewChunkIndex )
+void ULPPMarchingMeshComponent::Initialize ( ULFPChunkedTagDataComponent* NewDataComponent , ULFPChunkedGridPositionComponent* NewPositionComponent , const int32 NewRegionIndex , const int32 NewChunkIndex )
 {
 	if ( IsDataComponentValid ( ) )
 	{
 		Uninitialize ( );
 	}
 
-	DataComponent = NewDataComponent;
-	RegionIndex   = NewRegionIndex;
-	ChunkIndex    = NewChunkIndex;
+	DataComponent     = NewDataComponent;
+	PositionComponent = NewPositionComponent;
+	RegionIndex       = NewRegionIndex;
+	ChunkIndex        = NewChunkIndex;
 }
 
 void ULPPMarchingMeshComponent::Uninitialize ( )
@@ -157,7 +161,7 @@ void ULPPMarchingMeshComponent::ClearRender ( )
 		FScopeLock TDLock ( &ThreadDataLock );
 		FScopeLock DFLock ( &DistanceFieldDataLock );
 
-		LocalThreadData.Reset ( );
+		CurrentMeshData.Reset ( );
 		DistanceFieldData.Reset ( );
 	}
 
@@ -186,7 +190,7 @@ bool ULPPMarchingMeshComponent::UpdateRender ( )
 		for ( int32 SolidIndex = 0 ; SolidIndex < CacheDataIndex ; ++SolidIndex )
 		{
 			const FIntVector CheckOffset = ULFPGridLibrary::ToGridLocation ( SolidIndex , CacheDataSize ) - FIntVector ( 1 );
-			const FIntVector CheckIndex  = DataComponent->AddOffsetToDataGridIndex ( FIntVector ( RegionIndex , ChunkIndex , 0 ) , CheckOffset );
+			const FIntVector CheckIndex  = PositionComponent->AddOffsetToDataGridIndex ( FIntVector ( RegionIndex , ChunkIndex , 0 ) , CheckOffset );
 
 			if ( CheckIndex.GetMin ( ) == INDEX_NONE )
 			{
@@ -222,7 +226,7 @@ bool ULPPMarchingMeshComponent::UpdateRender ( )
 	{
 		FScopeLock Lock ( &ThreadDataLock );
 
-		LocalThreadData.Reset ( );
+		CurrentMeshData.Reset ( );
 	}
 
 	OnMeshRebuilding.Broadcast ( this );
@@ -254,18 +258,22 @@ bool ULPPMarchingMeshComponent::UpdateRender ( )
 	MeshComputeData.LaunchJob ( TEXT ( "MarchingDynamicMeshComponentMeshData" ) ,
 	                            [this, MovedCacheDataList = MoveTemp ( CacheDataList ),MovedPassData = MoveTemp ( PassData )] ( FProgressCancel& Progress , TQueue < TFunction < void  ( ) > , EQueueMode::Mpsc >& GameThreadJob )
 	                            {
-		                            TUniquePtr < FLFPMarchingThreadData > ThreadData = ComputeNewMarchingMesh_TaskFunction ( Progress , MovedCacheDataList , MovedPassData );
+		                            LLM_SCOPE_BYTAG ( LFPMarchingMesh );
+
+		                            TUniquePtr < FLFPMarchingThreadData > ThreadData = MakeUnique < FLFPMarchingThreadData > ( );;
+
+		                            ComputeNewMarchingMesh_TaskFunction ( ThreadData , Progress , MovedCacheDataList , MovedPassData );
 
 		                            if ( Progress.Cancelled ( ) == false )
 		                            {
-			                            ComputeNewMarchingMesh_Completed ( MoveTemp ( ThreadData ) , GameThreadJob );
+			                            ComputeNewMarchingMesh_Completed ( ThreadData , GameThreadJob );
 		                            }
 	                            } );
 
 	return true;
 }
 
-void ULPPMarchingMeshComponent::UpdateDistanceField ( const FDynamicMesh3& ReadMesh )
+void ULPPMarchingMeshComponent::UpdateDistanceField ( )
 {
 	if ( bGenerateDistanceField == false )
 	{
@@ -275,7 +283,7 @@ void ULPPMarchingMeshComponent::UpdateDistanceField ( const FDynamicMesh3& ReadM
 	{
 		FScopeLock Lock ( &ThreadDataLock );
 
-		if ( DistanceFieldResolutionScale <= 0.0f || LocalThreadData.IsValid ( ) == false || IsDataComponentValid ( ) == false || MeshCompactData.Position.IsEmpty ( ) )
+		if ( DistanceFieldResolutionScale <= 0.0f || CurrentMeshData.IsValid ( ) == false || IsDataComponentValid ( ) == false )
 		{
 			DistanceFieldComputeData.CancelJob ( );
 			DistanceFieldData.Reset ( );
@@ -292,7 +300,7 @@ void ULPPMarchingMeshComponent::UpdateDistanceField ( const FDynamicMesh3& ReadM
 	// Compute whether the mesh uses mainly two-sided materials before, as this is the only info the distance field compute needs from the mesh attributes
 	bool bMostlyTwoSided = IsValid ( GetMaterial ( 0 ) ) ? GetMaterial ( 0 )->IsTwoSided ( ) : false;
 
-	GeoOnlyCopy.Copy ( ReadMesh , false , false , false , false );
+	GeoOnlyCopy.Copy ( *CurrentMeshData.Get ( ) , false , false , false , false );
 
 	GetWorld ( )->GetTimerManager ( ).SetTimer ( DistanceFieldBatchHandler , [this , GeoOnlyCopy , bMostlyTwoSided] ( ) mutable
 	{
@@ -309,7 +317,7 @@ void ULPPMarchingMeshComponent::UpdateDistanceField ( const FDynamicMesh3& ReadM
 		{
 			FScopeLock Lock ( &ThreadDataLock );
 
-			if ( DistanceFieldResolutionScale <= 0.0f || LocalThreadData.IsValid ( ) == false || IsDataComponentValid ( ) == false || MeshCompactData.Position.IsEmpty ( ) )
+			if ( DistanceFieldResolutionScale <= 0.0f || CurrentMeshData.IsValid ( ) == false || IsDataComponentValid ( ) == false )
 			{
 				DistanceFieldComputeData.CancelJob ( );
 				DistanceFieldData.Reset ( );
@@ -367,7 +375,7 @@ void ULPPMarchingMeshComponent::UpdateDistanceField ( const FDynamicMesh3& ReadM
 			for ( int32 DataIndex = 0 ; DataIndex < DataNum ; ++DataIndex )
 			{
 				const FIntVector VoxelPos       = ULFPGridLibrary::ToGridLocation ( DataIndex , DataSize );
-				const FIntVector VoxelDataIndex = DataComponent->AddOffsetToDataGridIndex ( FIntVector ( RegionIndex , ChunkIndex , 0 ) , VoxelPos );
+				const FIntVector VoxelDataIndex = PositionComponent->AddOffsetToDataGridIndex ( FIntVector ( RegionIndex , ChunkIndex , 0 ) , VoxelPos );
 
 				const FGameplayTag& SelfVoxelTag = DataComponent->GetDataTag ( VoxelDataIndex.X , VoxelDataIndex.Y , VoxelDataIndex.Z );
 
@@ -375,7 +383,7 @@ void ULPPMarchingMeshComponent::UpdateDistanceField ( const FDynamicMesh3& ReadM
 				{
 					for ( int32 FaceDirectionIndex = 0 ; FaceDirectionIndex < 6 ; ++FaceDirectionIndex )
 					{
-						const FIntVector& TargetIndex = DataComponent->AddOffsetToDataGridIndex ( VoxelDataIndex , LFPMarchingRenderConstantData::FaceDirection [ FaceDirectionIndex ].Up );
+						const FIntVector& TargetIndex = PositionComponent->AddOffsetToDataGridIndex ( VoxelDataIndex , LFPMarchingRenderConstantData::FaceDirection [ FaceDirectionIndex ].Up );
 
 						const bool bForceRender = ULFPGridLibrary::IsGridLocationValid ( VoxelPos + LFPMarchingRenderConstantData::FaceDirection [ FaceDirectionIndex ].Up , DataSize ) == false;
 
@@ -434,36 +442,32 @@ FPrimitiveSceneProxy* ULPPMarchingMeshComponent::CreateSceneProxy ( )
 		{
 			FScopeLock Lock ( &ThreadDataLock );
 
-			if ( LocalThreadData.IsValid ( ) )
-			{
-				NewDynamicProxy->SetLumenData ( LocalThreadData.Get ( )->LumenCardData , LocalThreadData.Get ( )->LumenBound );
-			}
+			NewDynamicProxy->SetLumenData ( CurrentLumenCardData , CurrentLumenBound );
 		}
 	}
 
 	return NewProxy;
 }
 
-void ULPPMarchingMeshComponent::NotifyMeshUpdated ( const FDynamicMesh3& MeshData )
+void ULPPMarchingMeshComponent::NotifyMeshUpdated ( )
 {
-	Super::NotifyMeshUpdated ( MeshData );
+	Super::NotifyMeshUpdated ( );
 
-	UpdateDistanceField ( MeshData );
+	UpdateDistanceField ( );
 }
 
-TUniquePtr < FLFPMarchingThreadData > ULPPMarchingMeshComponent::ComputeNewMarchingMesh_TaskFunction ( FProgressCancel& Progress , const TBitArray < >& SolidList , const FLFPMarchingPassData& PassData )
+void ULPPMarchingMeshComponent::ComputeNewMarchingMesh_TaskFunction ( TUniquePtr < FLFPMarchingThreadData >& ThreadData , FProgressCancel& Progress , const TBitArray < >& SolidList , const FLFPMarchingPassData& PassData )
 {
 	if ( Progress.Cancelled ( ) )
 	{
-		return nullptr;
+		return;
 	}
 
 	TRACE_CPUPROFILER_EVENT_SCOPE ( MarchingMesh_GeneratingThreadData );
 
-	TUniquePtr < FLFPMarchingThreadData > NewMeshData = MakeUnique < FLFPMarchingThreadData > ( );
-
-	NewMeshData->StartTime = PassData.StartTime;
-	NewMeshData->DataID    = PassData.DataID;
+	FDateTime WorkTime    = FDateTime::UtcNow ( );
+	ThreadData->StartTime = PassData.StartTime;
+	ThreadData->DataID    = PassData.DataID;
 
 	const FVector& MeshFullSize = PassData.MeshFullSize;
 	const FVector  MeshGapSize  = MeshFullSize;
@@ -501,7 +505,7 @@ TUniquePtr < FLFPMarchingThreadData > ULPPMarchingMeshComponent::ComputeNewMarch
 
 	if ( Progress.Cancelled ( ) )
 	{
-		return nullptr;
+		return;
 	}
 
 	// Mesh Data
@@ -509,9 +513,10 @@ TUniquePtr < FLFPMarchingThreadData > ULPPMarchingMeshComponent::ComputeNewMarch
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE ( MarchingMesh_GeneratingMesh );
 
-		FDynamicMesh3& MeshData = NewMeshData->MeshData;
+		FDynamicMesh3* MeshData = &ThreadData->MeshData;
 		{
-			MeshData.EnableAttributes ( );
+			MeshData->Clear ( );
+			MeshData->EnableAttributes ( );
 		}
 
 		bool bHasMesh = false;
@@ -534,7 +539,7 @@ TUniquePtr < FLFPMarchingThreadData > ULPPMarchingMeshComponent::ComputeNewMarch
 		{
 			const TObjectPtr < ULPPMarchingData >& MeshAsset = PassData.RenderSetting;
 
-			UE::Geometry::FDynamicMeshEditor Editor ( &MeshData );
+			UE::Geometry::FDynamicMeshEditor Editor ( MeshData );
 
 			/* Generate Marching Mesh Data */
 			for ( int32 MarchingIndex = 0 ; MarchingIndex < MarchingNum ; ++MarchingIndex )
@@ -545,7 +550,7 @@ TUniquePtr < FLFPMarchingThreadData > ULPPMarchingMeshComponent::ComputeNewMarch
 
 				if ( Progress.Cancelled ( ) )
 				{
-					return nullptr;
+					return;
 				}
 
 				if ( const FLFPMarchingMeshMappingDataV2& MeshMappingData = MeshAsset->GetMappingData ( MarchingID ) ; MeshMappingData.MeshID != INDEX_NONE )
@@ -573,7 +578,7 @@ TUniquePtr < FLFPMarchingThreadData > ULPPMarchingMeshComponent::ComputeNewMarch
 			}
 
 			{
-				UE::Geometry::FMergeCoincidentMeshEdges Welder ( &MeshData );
+				UE::Geometry::FMergeCoincidentMeshEdges Welder ( MeshData );
 				Welder.MergeVertexTolerance = PassData.EdgeMergeDistance;
 				Welder.OnlyUniquePairs      = false;
 				Welder.Apply ( );
@@ -592,7 +597,7 @@ TUniquePtr < FLFPMarchingThreadData > ULPPMarchingMeshComponent::ComputeNewMarch
 
 				for ( const FVector& EdgeDirection : EdgeDirectionList )
 				{
-					UE::Geometry::FMeshPlaneCut Cut ( &MeshData , EdgeDirection * MeshBoundHalfSize , EdgeDirection );
+					UE::Geometry::FMeshPlaneCut Cut ( MeshData , EdgeDirection * MeshBoundHalfSize , EdgeDirection );
 					Cut.bCollapseDegenerateEdgesOnCut = false;
 					Cut.Cut ( );
 				}
@@ -600,11 +605,11 @@ TUniquePtr < FLFPMarchingThreadData > ULPPMarchingMeshComponent::ComputeNewMarch
 
 			if ( PassData.bRecomputeBoxUV )
 			{
-				FDynamicMeshUVOverlay*             UVOverlay = MeshData.Attributes ( )->PrimaryUV ( );
-				UE::Geometry::FDynamicMeshUVEditor UVEditor ( &MeshData , UVOverlay );
+				FDynamicMeshUVOverlay*             UVOverlay = MeshData->Attributes ( )->PrimaryUV ( );
+				UE::Geometry::FDynamicMeshUVEditor UVEditor ( MeshData , UVOverlay );
 
 				TArray < int32 > TriangleROI;
-				for ( const int32 TriangleID : MeshData.TriangleIndicesItr ( ) )
+				for ( const int32 TriangleID : MeshData->TriangleIndicesItr ( ) )
 				{
 					TriangleROI.Add ( TriangleID );
 				}
@@ -618,21 +623,25 @@ TUniquePtr < FLFPMarchingThreadData > ULPPMarchingMeshComponent::ComputeNewMarch
 
 			if ( PassData.bSimplifyRenderData )
 			{
-				UE::Geometry::FQEMSimplification Simplifier ( &MeshData );
+				UE::Geometry::FQEMSimplification Simplifier ( MeshData );
 
-				constexpr float AngleThreshold = 0.1;
+				Simplifier.bAllowSeamCollapse     = true;
+				Simplifier.bPreserveBoundaryShape = true;
+				Simplifier.SimplifyToMinimalPlanar ( PassData.SimplifyAngle );
 
-				Simplifier.SimplifyToMinimalPlanar ( AngleThreshold );
+				UE::Geometry::FMeshNormals MeshNormals ( MeshData );
+				MeshNormals.RecomputeOverlayNormals ( MeshData->Attributes ( )->PrimaryNormals ( ) , true , true );
+				MeshNormals.CopyToOverlay ( MeshData->Attributes ( )->PrimaryNormals ( ) , false );
 			}
 
-			MeshData.RemoveUnusedVertices ( );
-			MeshData.CompactInPlace ( nullptr );
+			MeshData->RemoveUnusedVertices ( );
+			MeshData->CompactInPlace ( nullptr );
 		}
 	}
 
 	if ( Progress.Cancelled ( ) )
 	{
-		return nullptr;
+		return;
 	}
 
 	// Lumen Card
@@ -731,9 +740,9 @@ TUniquePtr < FLFPMarchingThreadData > ULPPMarchingMeshComponent::ComputeNewMarch
 			CardBuildList.Add ( BuildData );
 		};
 
-		NewMeshData->LumenBound = FBox ( CurrentLocalBounds );
+		ThreadData->LumenBound = FBox ( CurrentLocalBounds );
 
-		TArray < FLumenCardBuildData >& CardBuildList = NewMeshData->LumenCardData;
+		TArray < FLumenCardBuildData >& CardBuildList = ThreadData->LumenCardData;
 
 		CardBuildList.Empty ( );
 
@@ -757,7 +766,7 @@ TUniquePtr < FLFPMarchingThreadData > ULPPMarchingMeshComponent::ComputeNewMarch
 		{
 			if ( Progress.Cancelled ( ) )
 			{
-				return nullptr;
+				return;
 			}
 
 			const FIntVector MarchingDimension = FIntVector (
@@ -830,7 +839,7 @@ TUniquePtr < FLFPMarchingThreadData > ULPPMarchingMeshComponent::ComputeNewMarch
 
 	if ( Progress.Cancelled ( ) )
 	{
-		return nullptr;
+		return;
 	}
 
 	// Collision Box
@@ -879,7 +888,7 @@ TUniquePtr < FLFPMarchingThreadData > ULPPMarchingMeshComponent::ComputeNewMarch
 		{
 			if ( Progress.Cancelled ( ) )
 			{
-				return nullptr;
+				return;
 			}
 
 			for ( int32 Y = 0 ; Y < DataSize.Y ; Y++ )
@@ -926,7 +935,7 @@ TUniquePtr < FLFPMarchingThreadData > ULPPMarchingMeshComponent::ComputeNewMarch
 
 		if ( Progress.Cancelled ( ) )
 		{
-			return nullptr;
+			return;
 		}
 
 		/** Add To Result */
@@ -941,47 +950,46 @@ TUniquePtr < FLFPMarchingThreadData > ULPPMarchingMeshComponent::ComputeNewMarch
 
 			CurrentBoxElem.Center = Center;
 
-			NewMeshData->CollisionBoxElems.Add ( CurrentBoxElem );
+			ThreadData->CollisionBoxElems.Add ( CurrentBoxElem );
 		}
 	}
 
 	if ( Progress.Cancelled ( ) )
 	{
-		return nullptr;
+		return;
 	}
 
-	return
-		NewMeshData;
+	ThreadData->WorkLenght = static_cast < int32 > ( ( FDateTime::UtcNow ( ) - WorkTime ).GetTotalMilliseconds ( ) );
+
+	return;
 }
 
-void ULPPMarchingMeshComponent::ComputeNewMarchingMesh_Completed ( TUniquePtr < FLFPMarchingThreadData > ThreadData , TQueue < TFunction < void  ( ) > , EQueueMode::Mpsc >& GameThreadJob )
+void ULPPMarchingMeshComponent::ComputeNewMarchingMesh_Completed ( TUniquePtr < FLFPMarchingThreadData >& ThreadData , TQueue < TFunction < void  ( ) > , EQueueMode::Mpsc >& GameThreadJob )
 {
 	if ( IsValid ( this ) == false )
 	{
 		return;
 	}
 
-	// Write Data
+	if ( ThreadData.IsValid ( ) == false )
 	{
-		FScopeLock Lock ( &ThreadDataLock );
-
-		if ( ThreadData.IsValid ( ) )
-		{
-			LocalThreadData = MakeShareable ( ThreadData.Release ( ) );
-		}
-		else
-		{
-			LocalThreadData.Reset ( );
-		}
+		return;
 	}
 
 	if ( bUpdatingThreadData == false )
 	{
 		bUpdatingThreadData = true;
 
-		GameThreadJob.Enqueue ( [this ] ( )
+		TSharedPtr < FLFPMarchingThreadData > TempThreadData = MakeShareable < FLFPMarchingThreadData > ( ThreadData.Release ( ) );
+
+		GameThreadJob.Enqueue ( [ this , TempThreadData] ( )
 		{
-			if ( IsValid ( this ) == false )
+			if ( IsValidLowLevel ( ) == false || IsValid ( this ) == false )
+			{
+				return;
+			}
+
+			if ( TempThreadData.IsValid ( ) == false || TempThreadData->DataID != ClearMeshCounter )
 			{
 				return;
 			}
@@ -991,25 +999,26 @@ void ULPPMarchingMeshComponent::ComputeNewMarchingMesh_Completed ( TUniquePtr < 
 			{
 				FScopeLock Lock ( &ThreadDataLock );
 
-				if ( LocalThreadData.IsValid ( ) && LocalThreadData->DataID == ClearMeshCounter )
-				{
-					//const float CompactMetric = LocalThreadData->MeshData.CompactMetric ( );
+				//const float CompactMetric = NewThreadData->MeshData.CompactMetric ( );
 
-					//UE_LOG ( LogTemp , Warning , TEXT("Marching Data : %s") , *LocalThreadData->MeshData.MeshInfoString ( ) );
+				//UE_LOG ( LogTemp , Warning , TEXT("Marching Data : %s") , *LocalThreadData->MeshData.MeshInfoString ( ) );
 
-					//UE_LOG ( LogTemp , Warning , TEXT("Marching Data Collision : %i") , LocalThreadData->CollisionBoxElems.Num ( ) );
+				//UE_LOG ( LogTemp , Warning , TEXT("Marching Data Collision : %i") , LocalThreadData->CollisionBoxElems.Num ( ) );
 
-					AggGeom.BoxElems = LocalThreadData->CollisionBoxElems;
+				FKAggregateGeom NewAgg;
 
-					SetMesh ( MoveTemp ( LocalThreadData->MeshData ) );
+				NewAgg.BoxElems = MoveTemp ( TempThreadData->CollisionBoxElems );
 
-					LocalThreadData->MeshData.Clear ( );
+				SetMesh ( MoveTemp ( TempThreadData->MeshData ) , MoveTemp ( NewAgg ) );
 
-					//UE_LOG ( LogTemp , Warning , TEXT("Marching Data Time Use : %d ms : Compact %f") , (int32)(FDateTime::UtcNow() - LocalThreadData->StartTime).GetTotalMilliseconds() , CompactMetric );
+				CurrentLumenBound = MoveTemp ( TempThreadData->LumenBound );
 
-					OnMeshGenerated.Broadcast ( this );
-				}
+				CurrentLumenCardData = MoveTemp ( TempThreadData->LumenCardData );
+
+				//UE_LOG ( LogTemp , Warning , TEXT("Marching Data Time Use : %d ms : Compact %f") , (int32)(FDateTime::UtcNow() - NewThreadData->StartTime).GetTotalMilliseconds() , CompactMetric );
 			}
+
+			OnMeshGenerated.Broadcast ( this );
 		} );
 	}
 }
@@ -1044,13 +1053,13 @@ TUniquePtr < FDistanceFieldVolumeData > ULPPMarchingMeshComponent::ComputeNewDis
 			return ( MarchingCoordinate.Z * VolumeDimensions.Y + MarchingCoordinate.Y ) * VolumeDimensions.X + MarchingCoordinate.X;
 		};
 
-		UE::Geometry::FDynamicMeshAABBTree3 Spatial ( &Mesh , true );
+		UE::Geometry::FDynamicMeshAABBTree3 Spatial ( &Mesh , true ); // Find Nearby Triangle
 		if ( Progress.Cancelled ( ) )
 		{
 			return nullptr;
 		}
 		UE::Geometry::FAxisAlignedBox3d                  MeshBounds = Spatial.GetBoundingBox ( );
-		UE::Geometry::TFastWindingTree < FDynamicMesh3 > WindingTree ( &Spatial , true );
+		UE::Geometry::TFastWindingTree < FDynamicMesh3 > WindingTree ( &Spatial , true ); // Find Is Inside Or Not
 		if ( Progress.Cancelled ( ) )
 		{
 			return nullptr;

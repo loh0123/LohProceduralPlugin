@@ -28,7 +28,7 @@ public:
 	                                                                                    , bEnableRaytracing ( true )
 	                                                                                    , bPreferStaticDrawPath ( true )
 	                                                                                    , DistanceFieldData ( nullptr )
-	                                                                                    , MaterialRelevance ( Component->GetMaterialRelevance ( GetScene ( ).GetFeatureLevel ( ) ) )
+	                                                                                    , MaterialRelevance ( Component->GetMaterialRelevance ( GetScene ( ).GetShaderPlatform ( ) ) )
 	                                                                                    , ParentComponent ( Component )
 	                                                                                    , DFBias ( NewDFBias )
 	                                                                                    , CollisionTraceFlag ( )
@@ -62,10 +62,10 @@ protected:
 	FCriticalSection AllocatedSetsLock;
 
 	// control raytracing support
-	bool bEnableRaytracing = false;
+	bool bEnableRaytracing = true;
 
 	// whether to try to use the static draw instead of dynamic draw path; note we may still use the dynamic path if collision or vertex color rendering is enabled
-	bool bPreferStaticDrawPath = false;
+	bool bPreferStaticDrawPath = true;
 
 protected:
 
@@ -130,6 +130,8 @@ public:
 		TArray < FVector3f >& TangentList ,
 		TArray < FVector3f >& BiTangentList
 		) >& InitFunc );
+
+	void InitializeFromMesh ( const FDynamicMesh3* MeshData );
 
 public:
 

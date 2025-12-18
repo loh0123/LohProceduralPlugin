@@ -92,6 +92,160 @@ void FLPPChunkedDynamicMeshProxy::Initialize ( const TFunctionRef < bool  ( TArr
 	                                                                           } );
 }
 
+void FLPPChunkedDynamicMeshProxy::InitializeFromMesh ( const FDynamicMesh3* MeshData )
+{
+	if ( MeshData == nullptr )
+	{
+		return;
+	}
+
+	if ( MeshData->TriangleCount ( ) != 0 )
+	{
+		/** Vertex position */
+		TArray < FVector3f > MeshPosition = TArray < FVector3f > ( );
+
+		/** Vertex normal */
+		TArray < FVector3f > MeshNormal = TArray < FVector3f > ( );
+
+		/** Vertex color */
+		TArray < FColor > MeshColor = TArray < FColor > ( );
+
+		/** Vertex texture co-ordinate */
+		TArray < FVector2f > MeshUV0 = TArray < FVector2f > ( );
+
+		const int NumTriangles  = MeshData->TriangleCount ( );
+		const int NumVertices   = NumTriangles * 3;
+		const int NumUVOverlays = MeshData->HasAttributes ( ) ? MeshData->Attributes ( )->NumUVLayers ( ) : 0;
+
+		const FDynamicMeshNormalOverlay* NormalOverlay = MeshData->HasAttributes ( ) ? MeshData->Attributes ( )->PrimaryNormals ( ) : nullptr;
+		const FDynamicMeshColorOverlay*  ColorOverlay  = MeshData->HasAttributes ( ) ? MeshData->Attributes ( )->PrimaryColors ( ) : nullptr;
+
+		const bool bHasColor    = ColorOverlay != nullptr;
+		const bool bHasTangents = MeshData->HasAttributes ( ) && MeshData->Attributes ( )->HasTangentSpace ( );
+
+		UE::Geometry::FDynamicMeshTangents Tangents ( MeshData );
+
+		{
+			MeshPosition.AddUninitialized ( NumVertices );
+			MeshNormal.AddUninitialized ( NumVertices );
+			MeshUV0.AddUninitialized ( NumVertices );
+
+			if ( bHasColor )
+			{
+				MeshColor.AddUninitialized ( NumVertices );
+			}
+		}
+
+		// populate the triangle array.  we use this for parallelism. 
+		TArray < int32 > TriangleArray;
+		{
+			TriangleArray.Reserve ( NumTriangles );
+			for ( const int32 TriangleID : MeshData->TriangleIndicesItr ( ) )
+			{
+				if ( MeshData->IsTriangle ( TriangleID ) == false )
+				{
+					continue;
+				}
+
+				TriangleArray.Add ( TriangleID );
+			}
+		}
+
+		ParallelFor ( TriangleArray.Num ( ) , [&] ( int idx )
+		{
+			const int32 TriangleID = TriangleArray [ idx ];
+
+			UE::Geometry::FIndex3i TriIndexList       = MeshData->GetTriangle ( TriangleID );
+			UE::Geometry::FIndex3i TriNormalIndexList = ( NormalOverlay != nullptr ) ? NormalOverlay->GetTriangle ( TriangleID ) : UE::Geometry::FIndex3i::Invalid ( );
+			UE::Geometry::FIndex3i TriColorIndexList  = ( ColorOverlay != nullptr ) ? ColorOverlay->GetTriangle ( TriangleID ) : UE::Geometry::FIndex3i::Invalid ( );
+
+			const int32 VertOffset = idx * 3;
+			for ( int32 IndexOffset = 0 ; IndexOffset < 3 ; ++IndexOffset )
+			{
+				const int32 ListIndex     = VertOffset + IndexOffset;
+				const int32 TriangleIndex = TriIndexList [ IndexOffset ];
+				const int32 NormalIndex   = TriNormalIndexList [ IndexOffset ];
+				const int32 ColorIndex    = TriColorIndexList [ IndexOffset ];
+
+				MeshPosition [ ListIndex ] = static_cast < FVector3f > ( MeshData->GetVertex ( TriangleIndex ) );
+				MeshNormal [ ListIndex ]   = NormalIndex != FDynamicMesh3::InvalidID ? NormalOverlay->GetElement ( NormalIndex ) : MeshData->GetVertexNormal ( TriangleIndex );
+
+				if ( bHasColor )
+				{
+					MeshColor [ ListIndex ] = static_cast < FLinearColor > ( ColorIndex != FDynamicMesh3::InvalidID ? ColorOverlay->GetElement ( ColorIndex ) : static_cast < FVector4f > ( MeshData->GetVertexColor ( TriangleIndex ) ) ).ToFColor ( true );
+				}
+			}
+
+			{
+				//MeshNormal [ idx ] = NormalIndex != FDynamicMesh3::InvalidID ? NormalOverlay->GetElement ( NormalIndex ) : MeshData->GetVertexNormal ( TriangleIndex );
+				//
+				//if ( bHasTangents )
+				//{
+				//	Tangents.GetTangentVectors ( TriangleID , IndexOffset , MeshNormal [ ListIndex ] , MeshTangent [ ListIndex ] , MeshBiTangent [ ListIndex ] );
+				//}
+				//else
+				//{
+				//	UE::Geometry::VectorUtil::MakePerpVectors ( MeshNormal [ ListIndex ] , MeshTangent [ ListIndex ] , MeshBiTangent [ ListIndex ] );
+				//}
+			}
+
+			for ( int32 TexIndex = 0 ; TexIndex < 1 /*NumTexCoords */; ++TexIndex )
+			{
+				const FDynamicMeshUVOverlay* UVOverlay = MeshData->HasAttributes ( ) ? MeshData->Attributes ( )->GetUVLayer ( TexIndex ) : nullptr;
+
+				UE::Geometry::FIndex3i TriUVIndexList = ( UVOverlay != nullptr ) ? UVOverlay->GetTriangle ( TriangleID ) : UE::Geometry::FIndex3i::Invalid ( );
+
+				for ( int32 IndexOffset = 0 ; IndexOffset < 3 ; ++IndexOffset )
+				{
+					const int32 ListIndex = VertOffset + IndexOffset;
+					const int32 UVIndex   = TriUVIndexList [ IndexOffset ];
+
+					MeshUV0 [ ListIndex ] = ( UVIndex != FDynamicMesh3::InvalidID ) ? UVOverlay->GetElement ( UVIndex ) : FVector2f::Zero ( );
+				}
+			}
+		} );
+
+		Initialize ( [&] (
+		            TArray < FVector3f >& PositionList ,
+		            TArray < uint32 >&    IndexList ,
+		            TArray < FVector2f >& UV0List ,
+		            TArray < FColor >&    ColorList ,
+		            TArray < FVector3f >& NormalList ,
+		            TArray < FVector3f >& TangentList ,
+		            TArray < FVector3f >& BiTangentList
+		            )
+		            {
+			            if ( MeshPosition.IsEmpty ( ) )
+			            {
+				            return false;
+			            }
+
+			            PositionList = MeshPosition;
+			            UV0List      = MeshUV0;
+			            ColorList    = MeshColor;
+			            NormalList   = MeshNormal;
+			            //TangentList   = MeshTangent;
+			            //BiTangentList = MeshBiTangent;
+
+			            //NormalList.AddUninitialized ( MeshPosition.Num ( ) );
+			            TangentList.AddUninitialized ( MeshPosition.Num ( ) );
+			            BiTangentList.AddUninitialized ( MeshPosition.Num ( ) );
+
+			            IndexList.Reserve ( MeshPosition.Num ( ) );
+
+			            for ( int32 Index = 0 ; Index < MeshPosition.Num ( ) ; ++Index )
+			            {
+				            IndexList.Add ( Index );
+
+				            UE::Geometry::VectorUtil::MakePerpVectors ( MeshNormal [ Index ] , TangentList [ Index ] , BiTangentList [ Index ] );
+			            }
+
+			            return true;
+		            }
+		           );
+	}
+}
+
 // Distance Field And Lumen
 
 void FLPPChunkedDynamicMeshProxy::SetDistanceFieldData ( const TSharedPtr < FDistanceFieldVolumeData >& InDistanceFieldData )
@@ -511,7 +665,7 @@ void FLPPChunkedDynamicMeshProxy::UpdatedReferencedMaterials ( )
 #endif
 
 	// The material relevance may need updating.
-	MaterialRelevance = ParentComponent->GetMaterialRelevance ( GetScene ( ).GetFeatureLevel ( ) );
+	MaterialRelevance = ParentComponent->GetMaterialRelevance ( GetScene ( ).GetShaderPlatform ( ) );
 }
 
 // Collision View
@@ -554,7 +708,7 @@ bool FLPPChunkedDynamicMeshProxy::IsCollisionView ( const FEngineShowFlags& Engi
 	{
 		// See if we have a response to the interested channel
 		bool bHasResponse = EngineShowFlags.CollisionPawn && CollisionResponse.GetResponse ( ECC_Pawn ) != ECR_Ignore;
-		bHasResponse |= EngineShowFlags.CollisionVisibility && CollisionResponse.GetResponse ( ECC_Visibility ) != ECR_Ignore;
+		bHasResponse      |= EngineShowFlags.CollisionVisibility && CollisionResponse.GetResponse ( ECC_Visibility ) != ECR_Ignore;
 
 		if ( bHasResponse )
 		{
@@ -625,10 +779,19 @@ void FLPPChunkedDynamicMeshProxy::DrawRayTracingBatch ( FRayTracingInstanceColle
 {
 	ensure ( RayTracingGeometry.Initializer.IndexBuffer.IsValid() );
 
+	TConstArrayView < const FSceneView* > Views         = Collector.GetViews ( );
+	const uint32                          VisibilityMap = Collector.GetVisibilityMap ( );
+
+	const int32 FirstActiveViewIndex = FMath::CountTrailingZeros ( VisibilityMap );
+	checkf ( Views.IsValidIndex(FirstActiveViewIndex) , TEXT("There should be at least one active view when calling GetDynamicRayTracingInstances(...).") );
+
+	const FSceneView* FirstActiveView = Views [ FirstActiveViewIndex ];
+
 	FRayTracingInstance RayTracingInstance;
 	RayTracingInstance.Geometry = &RayTracingGeometry;
 	RayTracingInstance.InstanceTransforms.Add ( GetLocalToWorld ( ) );
 
+	uint32     SectionIdx = 0;
 	FMeshBatch MeshBatch;
 
 	MeshBatch.VertexFactory       = &RenderBuffers.VertexFactory;
@@ -636,7 +799,7 @@ void FLPPChunkedDynamicMeshProxy::DrawRayTracingBatch ( FRayTracingInstanceColle
 	MeshBatch.MaterialRenderProxy = UseMaterialProxy;
 	MeshBatch.Type                = PT_TriangleList;
 	MeshBatch.DepthPriorityGroup  = DepthPriority;
-	MeshBatch.CastRayTracedShadow = IsShadowCast ( Collector.GetReferenceView ( ) );
+	MeshBatch.CastRayTracedShadow = IsShadowCast ( FirstActiveView );
 
 	FMeshBatchElement& BatchElement             = MeshBatch.Elements [ 0 ];
 	BatchElement.IndexBuffer                    = &IndexBuffer;
@@ -648,7 +811,15 @@ void FLPPChunkedDynamicMeshProxy::DrawRayTracingBatch ( FRayTracingInstanceColle
 
 	RayTracingInstance.Materials.Add ( MeshBatch );
 
-	Collector.AddRayTracingInstance ( MoveTemp ( RayTracingInstance ) );
+	for ( int32 ViewIndex = 0 ; ViewIndex < Views.Num ( ) ; ViewIndex++ )
+	{
+		if ( ( VisibilityMap & ( 1 << ViewIndex ) ) == 0 )
+		{
+			continue;
+		}
+
+		Collector.AddRayTracingInstance ( ViewIndex , RayTracingInstance );
+	}
 }
 
 #endif // RHI_RAYTRACING

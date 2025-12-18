@@ -6,7 +6,7 @@
 
 #include "Subsystem/LPPChunkManagerSubsystem.h"
 
-#include "Components/LFPGridTagDataComponent.h"
+#include "Components/LFPChunkedGridPositionComponent.h"
 #include "Interface/LPPChunkActorInterface.h"
 #include "Math/LFPGridLibrary.h"
 
@@ -37,9 +37,10 @@ TStatId ULPPChunkManagerSubsystem::GetStatId ( ) const
 	RETURN_QUICK_DECLARE_CYCLE_STAT ( ULPPChunkManagerSubsystem , STATGROUP_Tickables );
 }
 
-void ULPPChunkManagerSubsystem::SetupChunkManager ( const TArray < ULFPGridTagDataComponent* >& NewDataComponentList , const TSubclassOf < AActor > NewChunkActorClass , const FVector& NewSpawnOffset , const FVector& ChunkDataSize )
+void ULPPChunkManagerSubsystem::SetupChunkManager ( const TArray < ULFPChunkedTagDataComponent* >& NewDataComponentList , const TArray < ULFPChunkedGridPositionComponent* >& NewPositionComponentList , const TSubclassOf < AActor > NewChunkActorClass , const FVector& NewSpawnOffset , const FVector& ChunkDataSize )
 {
-	DataComponentList = NewDataComponentList;
+	DataComponentList     = NewDataComponentList;
+	PositionComponentList = NewPositionComponentList;
 
 	ChunkActorClass = NewChunkActorClass;
 	SpawnOffset     = NewSpawnOffset;
@@ -71,9 +72,9 @@ void ULPPChunkManagerSubsystem::SetupChunkManager ( const TArray < ULFPGridTagDa
 	{
 		ComponentChunkGapList.Reset ( );
 
-		for ( int32 LoopComponentIndex = 0 ; LoopComponentIndex < DataComponentList.Num ( ) ; ++LoopComponentIndex )
+		for ( int32 LoopComponentIndex = 0 ; LoopComponentIndex < PositionComponentList.Num ( ) ; ++LoopComponentIndex )
 		{
-			ComponentChunkGapList.Add ( static_cast < FVector > ( DataComponentList [ LoopComponentIndex ]->GetDataGridSize ( ) ) * ChunkDataSize );
+			ComponentChunkGapList.Add ( static_cast < FVector > ( PositionComponentList [ LoopComponentIndex ]->GetDataGridSize ( ) ) * ChunkDataSize );
 		}
 	}
 
@@ -82,23 +83,23 @@ void ULPPChunkManagerSubsystem::SetupChunkManager ( const TArray < ULFPGridTagDa
 
 		float ComponentHeight = 0.0f;
 
-		for ( int32 LoopComponentIndex = 0 ; LoopComponentIndex < DataComponentList.Num ( ) ; ++LoopComponentIndex )
+		for ( int32 LoopComponentIndex = 0 ; LoopComponentIndex < PositionComponentList.Num ( ) ; ++LoopComponentIndex )
 		{
-			ComponentHeight += DataComponentList [ LoopComponentIndex ]->GetChunkGridSize ( ).Z * ComponentChunkGapList [ LoopComponentIndex ].Z;
-
 			ComponentHeightList.Add ( ComponentHeight );
+
+			ComponentHeight += PositionComponentList [ LoopComponentIndex ]->GetChunkGridSize ( ).Z * ComponentChunkGapList [ LoopComponentIndex ].Z;
 		}
 	}
 }
 
 FVector ULPPChunkManagerSubsystem::GetChunkLocation ( const int32 ComponentIndex , const int32 RegionIndex , const int32 ChunkIndex ) const
 {
-	if ( DataComponentList.IsValidIndex ( ComponentIndex ) == false )
+	if ( PositionComponentList.IsValidIndex ( ComponentIndex ) == false )
 	{
 		return FVector::ZeroVector;
 	}
 
-	FVector ChunkLocation = FVector ( DataComponentList [ ComponentIndex ]->ToChunkGridPosition ( FIntPoint ( RegionIndex , ChunkIndex ) ) ) * ComponentChunkGapList [ ComponentIndex ];
+	FVector ChunkLocation = FVector ( PositionComponentList [ ComponentIndex ]->ToChunkGridPosition ( FIntPoint ( RegionIndex , ChunkIndex ) ) ) * ComponentChunkGapList [ ComponentIndex ];
 
 	ChunkLocation.Z += ComponentHeightList [ ComponentIndex ];
 	ChunkLocation += SpawnOffset;
@@ -106,7 +107,7 @@ FVector ULPPChunkManagerSubsystem::GetChunkLocation ( const int32 ComponentIndex
 	return ChunkLocation;
 }
 
-ULFPGridTagDataComponent* ULPPChunkManagerSubsystem::GetDataComponent ( const int32 ComponentIndex ) const
+ULFPChunkedTagDataComponent* ULPPChunkManagerSubsystem::GetDataComponent ( const int32 ComponentIndex ) const
 {
 	if ( DataComponentList.IsValidIndex ( ComponentIndex ) == false )
 	{
@@ -114,6 +115,44 @@ ULFPGridTagDataComponent* ULPPChunkManagerSubsystem::GetDataComponent ( const in
 	}
 
 	return DataComponentList [ ComponentIndex ];
+}
+
+ULFPChunkedGridPositionComponent* ULPPChunkManagerSubsystem::GetPositionComponent ( const int32 ComponentIndex ) const
+{
+	if ( PositionComponentList.IsValidIndex ( ComponentIndex ) == false )
+	{
+		return nullptr;
+	}
+
+	return PositionComponentList [ ComponentIndex ];
+}
+
+void ULPPChunkManagerSubsystem::LoadRegion ( const int32 ComponentIndex , const int32 RegionIndex , AActor* LoaderActor )
+{
+	if ( IsValid ( GetWorld ( ) ) == false )
+	{
+		return;
+	}
+
+	if ( IsValid ( LoaderActor ) == false )
+	{
+		return;
+	}
+
+	if ( IsValid ( ChunkActorClass ) == false )
+	{
+		return;
+	}
+
+	if ( PositionComponentList.IsValidIndex ( ComponentIndex ) == false )
+	{
+		return;
+	}
+
+	for ( int32 ChunkIndex = 0 ; ChunkIndex < PositionComponentList [ ComponentIndex ]->GetChunkedGridSize ( ).Y ; ++ChunkIndex )
+	{
+		LoadChunk ( ComponentIndex , RegionIndex , ChunkIndex , LoaderActor );
+	}
 }
 
 AActor* ULPPChunkManagerSubsystem::LoadChunk ( const int32 ComponentIndex , const int32 RegionIndex , const int32 ChunkIndex , AActor* LoaderActor )
@@ -133,7 +172,7 @@ AActor* ULPPChunkManagerSubsystem::LoadChunk ( const int32 ComponentIndex , cons
 		return nullptr;
 	}
 
-	if ( DataComponentList.IsValidIndex ( ComponentIndex ) == false )
+	if ( PositionComponentList.IsValidIndex ( ComponentIndex ) == false )
 	{
 		return nullptr;
 	}
@@ -163,8 +202,6 @@ AActor* ULPPChunkManagerSubsystem::LoadChunk ( const int32 ComponentIndex , cons
 				AsyncLoadChunk.Add ( FIntVector ( ComponentIndex , RegionIndex , ChunkIndex ) );
 			}
 		}
-
-		//NotifyChunkLoad ( ComponentIndex , RegionIndex , ChunkIndex );
 
 		return LoadedChunkRef.ChunkActor;
 	}
@@ -209,7 +246,7 @@ bool ULPPChunkManagerSubsystem::UnloadChunk ( const int32 ComponentIndex , const
 				}
 				else
 				{
-					NotifyChunkUnload ( LoadedChunkPtr->ChunkActor );
+					NotifyChunkUnload ( ComponentIndex , RegionIndex , ChunkIndex );
 				}
 			}
 
@@ -224,7 +261,7 @@ bool ULPPChunkManagerSubsystem::UnloadChunk ( const int32 ComponentIndex , const
 
 void ULPPChunkManagerSubsystem::RequestChunkUpdate ( const int32 ComponentIndex , const TArray < FIntVector >& GridDataIndexList , const bool bIsolateRegion )
 {
-	if ( ComponentIndex <= INDEX_NONE || IsValid ( DataComponentList [ ComponentIndex ] ) == false )
+	if ( ComponentIndex <= INDEX_NONE || IsValid ( PositionComponentList [ ComponentIndex ] ) == false )
 	{
 		return;
 	}
@@ -235,12 +272,12 @@ void ULPPChunkManagerSubsystem::RequestChunkUpdate ( const int32 ComponentIndex 
 	{
 		BroadcastChunkIDList.FindOrAdd ( FIntPoint ( GridDataIndex.X , GridDataIndex.Y ) ).Add ( GridDataIndex.Z );
 
-		const FIntVector DataPos = DataComponentList [ ComponentIndex ]->ToDataGridPosition ( FIntVector ( 0 , 0 , GridDataIndex.Z ) );
+		const FIntVector DataPos = PositionComponentList [ ComponentIndex ]->ToDataGridPosition ( FIntVector ( 0 , 0 , GridDataIndex.Z ) );
 
 		// Send update to any nearby chunk too if loaded
-		for ( const FIntVector& GridEdgeDir : ULFPGridLibrary::GetGridEdgeDirection ( DataPos , DataComponentList [ ComponentIndex ]->GetDataGridSize ( ) ) )
+		for ( const FIntVector& GridEdgeDir : ULFPGridLibrary::GetGridEdgeDirection ( DataPos , PositionComponentList [ ComponentIndex ]->GetDataGridSize ( ) ) )
 		{
-			const FIntPoint EdgeChunkIndex = DataComponentList [ ComponentIndex ]->AddOffsetToChunkGridIndex ( FIntPoint ( GridDataIndex.X , GridDataIndex.Y ) , GridEdgeDir );
+			const FIntPoint EdgeChunkIndex = PositionComponentList [ ComponentIndex ]->AddOffsetToChunkGridIndex ( FIntPoint ( GridDataIndex.X , GridDataIndex.Y ) , GridEdgeDir );
 
 			if ( bIsolateRegion && EdgeChunkIndex.X != GridDataIndex.X )
 			{
@@ -268,7 +305,7 @@ void ULPPChunkManagerSubsystem::NotifyChunkLoad ( const int32 ComponentIndex , c
 		// Does the chunk actor we spawn have the correct interface?
 		if ( LoadedChunkRef->ChunkActor->Implements < ULPPChunkActorInterface > ( ) )
 		{
-			ILPPChunkActorInterface::Execute_OnChunkIDChanged ( LoadedChunkRef->ChunkActor , DataComponentList [ ComponentIndex ] , RegionIndex , ChunkIndex );
+			ILPPChunkActorInterface::Execute_OnChunkIDChanged ( LoadedChunkRef->ChunkActor , ComponentIndex , RegionIndex , ChunkIndex );
 		}
 		else
 		{
@@ -277,19 +314,21 @@ void ULPPChunkManagerSubsystem::NotifyChunkLoad ( const int32 ComponentIndex , c
 	}
 }
 
-void ULPPChunkManagerSubsystem::NotifyChunkUnload ( AActor* UnloadActor ) const
+void ULPPChunkManagerSubsystem::NotifyChunkUnload ( const int32 ComponentIndex , const int32 RegionIndex , const int32 ChunkIndex ) const
 {
-	if ( IsValid ( UnloadActor ) )
+	const FLPPLoadedChunkData* LoadedChunkRef = LoadedChunkMap.Find ( FIntVector ( ComponentIndex , RegionIndex , ChunkIndex ) );
+
+	if ( LoadedChunkRef != nullptr && IsValid ( LoadedChunkRef->ChunkActor ) )
 	{
 		// Does the chunk actor we spawn have the correct interface?
-		if ( UnloadActor->Implements < ULPPChunkActorInterface > ( ) )
+		if ( LoadedChunkRef->ChunkActor->Implements < ULPPChunkActorInterface > ( ) )
 		{
 			// Tell the actor the id is invalid now 
-			ILPPChunkActorInterface::Execute_OnChunkIDChanged ( UnloadActor , nullptr , INDEX_NONE , INDEX_NONE );
+			ILPPChunkActorInterface::Execute_OnChunkIDChanged ( LoadedChunkRef->ChunkActor , ComponentIndex , INDEX_NONE , INDEX_NONE );
 		}
 		else
 		{
-			UE_LOG ( LogTemp , Error , TEXT ( "ChunkActor ( %s) does not implement ULPPChunkActorInterface" ) , *UnloadActor->GetName () );
+			UE_LOG ( LogTemp , Error , TEXT ( "ChunkActor ( %s) does not implement ULPPChunkActorInterface" ) , *LoadedChunkRef->ChunkActor->GetName () );
 		}
 	}
 }
@@ -324,7 +363,7 @@ AActor* ULPPChunkManagerSubsystem::AllocateChunkActor ( const int32 ComponentInd
 		return nullptr;
 	}
 
-	if ( DataComponentList.IsValidIndex ( ComponentIndex ) == false )
+	if ( PositionComponentList.IsValidIndex ( ComponentIndex ) == false )
 	{
 		return nullptr;
 	}

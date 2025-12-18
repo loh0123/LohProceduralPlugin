@@ -6,7 +6,8 @@
 
 #include "Components/LPPChunkRequester.h"
 
-#include "Components/LFPGridTagDataComponent.h"
+#include "Components/LFPChunkedGridPositionComponent.h"
+#include "Components/LFPChunkedTagDataComponent.h"
 #include "Subsystem/LPPChunkManagerSubsystem.h"
 
 
@@ -67,9 +68,15 @@ void ULPPChunkRequester::LoadChunkByNearbyPoint ( )
 		return;
 	}
 
-	const ULFPGridTagDataComponent* DataComponent;
+	const ULFPChunkedTagDataComponent*      DataComponent     = ManagerSystem->GetDataComponent ( CurrentCenterChunkIndex.X );
+	const ULFPChunkedGridPositionComponent* PositionComponent = ManagerSystem->GetPositionComponent ( CurrentCenterChunkIndex.X );
 
-	if ( DataComponent = ManagerSystem->GetDataComponent ( CurrentCenterChunkIndex.X ) ; IsValid ( DataComponent ) == false )
+	if ( IsValid ( DataComponent ) == false )
+	{
+		return;
+	}
+
+	if ( IsValid ( PositionComponent ) == false )
 	{
 		return;
 	}
@@ -81,7 +88,7 @@ void ULPPChunkRequester::LoadChunkByNearbyPoint ( )
 			for ( int32 Index_Z = -NearbyLoadDistance ; Index_Z <= NearbyLoadDistance ; ++Index_Z )
 			{
 				const FIntVector LoadOffset ( Index_X , Index_Y , Index_Z );
-				const FIntPoint  ChunkGridIndex = DataComponent->AddOffsetToChunkGridIndex ( FIntPoint ( CurrentCenterChunkIndex.Y , CurrentCenterChunkIndex.Z ) , LoadOffset );
+				const FIntPoint  ChunkGridIndex = PositionComponent->AddOffsetToChunkGridIndex ( FIntPoint ( CurrentCenterChunkIndex.Y , CurrentCenterChunkIndex.Z ) , LoadOffset );
 				const FIntVector LoadChunkIndex ( CurrentCenterChunkIndex.X , ChunkGridIndex.X , ChunkGridIndex.Y );
 
 				if ( LoadedChunkMap.Contains ( LoadChunkIndex ) == false && DataComponent->IsChunkIndexValid ( ChunkGridIndex.X , ChunkGridIndex.Y ) )
@@ -109,9 +116,15 @@ void ULPPChunkRequester::UnloadOutBoundChunk ( )
 		return;
 	}
 
-	const ULFPGridTagDataComponent* DataComponent;
+	const ULFPChunkedTagDataComponent*      DataComponent     = ManagerSystem->GetDataComponent ( CurrentCenterChunkIndex.X );
+	const ULFPChunkedGridPositionComponent* PositionComponent = ManagerSystem->GetPositionComponent ( CurrentCenterChunkIndex.X );
 
-	if ( DataComponent = ManagerSystem->GetDataComponent ( CurrentCenterChunkIndex.X ) ; IsValid ( DataComponent ) == false )
+	if ( IsValid ( DataComponent ) == false )
+	{
+		return;
+	}
+
+	if ( IsValid ( PositionComponent ) == false )
 	{
 		return;
 	}
@@ -131,7 +144,7 @@ void ULPPChunkRequester::UnloadOutBoundChunk ( )
 		}
 		else
 		{
-			const FIntVector Distance = DataComponent->GetDistanceToChunkGridIndex ( FIntPoint ( LoadedChunkIndex.Y , LoadedChunkIndex.Z ) , FIntPoint ( CurrentCenterChunkIndex.Y , CurrentCenterChunkIndex.Z ) );
+			const FIntVector Distance = PositionComponent->GetDistanceToChunkGridIndex ( FIntPoint ( LoadedChunkIndex.Y , LoadedChunkIndex.Z ) , FIntPoint ( CurrentCenterChunkIndex.Y , CurrentCenterChunkIndex.Z ) );
 
 			if ( Distance.GetMax ( ) > MaxLoadDistance )
 			{

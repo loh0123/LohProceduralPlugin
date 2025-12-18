@@ -7,6 +7,8 @@
 #include "Kismet/BlueprintFunctionLibrary.h"
 #include "LPPGridDataLibrary.generated.h"
 
+class ULFPChunkedTagDataComponent;
+class ULFPChunkedGridPositionComponent;
 class ULFPGridTagDataComponent;
 
 namespace NLPP_ChunkDataHelper
@@ -102,21 +104,22 @@ class LOHPROCEDURALPLUGIN_API ULPPGridDataLibrary : public UBlueprintFunctionLib
 public:
 
 	UFUNCTION ( BlueprintCallable , Category = "Default" )
-	static bool SetChunkConnectionMetaData ( ULFPGridTagDataComponent* DataComponent , const int32 RegionIndex , const int32 ChunkIndex , const FGameplayTag& BlockTag , const FGameplayTag& ConnectionMetaTag , const bool bDebug = false );
+	static bool SetChunkConnectionMetaData ( ULFPChunkedTagDataComponent* DataComponent , const ULFPChunkedGridPositionComponent* PositionComponent , const int32 RegionIndex , const int32 ChunkIndex , const FGameplayTag& BlockTag , const FGameplayTag& ConnectionMetaTag , const bool bDebug = false );
 
 	UFUNCTION ( BlueprintCallable , Category = "Default" )
-	static bool LineTraceChunkVisibleToCenterIndex ( const ULFPGridTagDataComponent* DataComponent , const int32 CenterRegionIndex , const int32 CenterChunkIndex , const int32 RegionIndex , const int32 ChunkIndex , const FGameplayTag& ConnectionMetaTag );
+	static bool LineTraceChunkVisibleToCenterIndex ( const ULFPChunkedTagDataComponent* DataComponent , const ULFPChunkedGridPositionComponent* PositionComponent , const int32 CenterRegionIndex , const int32 CenterChunkIndex , const int32 RegionIndex , const int32 ChunkIndex , const FGameplayTag& ConnectionMetaTag );
 
 	UFUNCTION ( BlueprintCallable , Category = "Default" )
 	static void IterateVisitableChunkList (
-		const ULFPGridTagDataComponent*     DataComponent ,
-		const int32                         CenterRegionIndex ,
-		const int32                         CenterChunkIndex ,
-		const FGameplayTag&                 ConnectionMetaTag ,
-		const uint8                         VisibleStepSize ,
-		const uint8                         MaxStepSize ,
-		const uint8                         LineTraceStep ,
-		TMap < FIntPoint , int32 >&         VisitedChunkList ,
-		TArray < FLPP_VisitableChunkData >& NextVisitableChunkList
+		const ULFPChunkedTagDataComponent*      DataComponent ,
+		const ULFPChunkedGridPositionComponent* PositionComponent ,
+		const int32                             CenterRegionIndex ,
+		const int32                             CenterChunkIndex ,
+		const FGameplayTag&                     ConnectionMetaTag ,
+		const uint8                             VisibleStepSize ,
+		const uint8                             MaxStepSize ,
+		const uint8                             LineTraceStep ,
+		TMap < FIntPoint , int32 >&             VisitedChunkList ,
+		TArray < FLPP_VisitableChunkData >&     NextVisitableChunkList
 		);
 };

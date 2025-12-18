@@ -12,43 +12,45 @@
 
 #include "LPPChunkedDynamicMesh.generated.h"
 
-USTRUCT ( )
-struct FLPPChunkedDynamicCompactMeshData
-{
-	GENERATED_BODY ( )
+LLM_DECLARE_TAG ( LFPDynamicMesh );
 
-	FLPPChunkedDynamicCompactMeshData ( ) = default;
-
-	FLPPChunkedDynamicCompactMeshData ( const int32 InNumVertices , const bool bHasColor )
-	{
-		Position.AddUninitialized ( InNumVertices );
-		Normal.AddUninitialized ( InNumVertices );
-		UV0.AddUninitialized ( InNumVertices );
-
-		if ( bHasColor )
-		{
-			Color.AddUninitialized ( InNumVertices );
-		}
-	}
-
-public:
-
-	/** Vertex position */
-	UPROPERTY ( )
-	TArray < FVector3f > Position = TArray < FVector3f > ( );
-
-	/** Vertex normal */
-	UPROPERTY ( )
-	TArray < FVector3f > Normal = TArray < FVector3f > ( );
-
-	/** Vertex color */
-	UPROPERTY ( )
-	TArray < FColor > Color = TArray < FColor > ( );
-
-	/** Vertex texture co-ordinate */
-	UPROPERTY ( )
-	TArray < FVector2f > UV0 = TArray < FVector2f > ( );
-};
+//USTRUCT ( )
+//struct FLPPChunkedDynamicCompactMeshData
+//{
+//	GENERATED_BODY ( )
+//
+//	FLPPChunkedDynamicCompactMeshData ( ) = default;
+//
+//	FLPPChunkedDynamicCompactMeshData ( const int32 InNumVertices , const bool bHasColor )
+//	{
+//		Position.AddUninitialized ( InNumVertices );
+//		Normal.AddUninitialized ( InNumVertices );
+//		UV0.AddUninitialized ( InNumVertices );
+//
+//		if ( bHasColor )
+//		{
+//			Color.AddUninitialized ( InNumVertices );
+//		}
+//	}
+//
+//public:
+//
+//	/** Vertex position */
+//	UPROPERTY ( )
+//	TArray < FVector3f > Position = TArray < FVector3f > ( );
+//
+//	/** Vertex normal */
+//	UPROPERTY ( )
+//	TArray < FVector3f > Normal = TArray < FVector3f > ( );
+//
+//	/** Vertex color */
+//	UPROPERTY ( )
+//	TArray < FColor > Color = TArray < FColor > ( );
+//
+//	/** Vertex texture co-ordinate */
+//	UPROPERTY ( )
+//	TArray < FVector2f > UV0 = TArray < FVector2f > ( );
+//};
 
 UCLASS ( ClassGroup=(Custom) , meta=(BlueprintSpawnableComponent) )
 class LOHPROCEDURALPLUGIN_API ULPPChunkedDynamicMesh : public UMeshComponent , public IInterface_CollisionDataProvider
@@ -74,22 +76,15 @@ public:
 
 public:
 
-	virtual void SetMesh ( FDynamicMesh3&& MoveMesh );
-
+	virtual void SetMesh ( FDynamicMesh3&& MoveMesh , FKAggregateGeom&& NewAggGeom );
 	virtual void ClearMesh ( );
 
 public:
 
-	virtual void NotifyMeshUpdated ( const FDynamicMesh3& MeshData );
+	virtual void NotifyMeshUpdated ( );
 	virtual void NotifyMaterialSetUpdated ( );
 
 protected:
-
-	UPROPERTY ( Transient )
-	FKAggregateGeom AggGeom;
-
-	UPROPERTY ( Transient )
-	TObjectPtr < UBodySetup > MeshBodySetup;
 
 	UPROPERTY ( Transient )
 	uint16 SetMeshCounter = 0;
@@ -99,13 +94,11 @@ protected:
 
 protected:
 
+	UPROPERTY ( Transient )
+	TObjectPtr < UBodySetup > MeshBodySetup = nullptr;
+
 	UPROPERTY ( EditAnywhere , Category = "Setting" )
 	bool bEnableComplexCollision = false;
-
-protected:
-
-	/** Current local-space bounding box of Mesh */
-	UE::Geometry::FAxisAlignedBox3d LocalBounds;
 
 public:
 
@@ -129,7 +122,7 @@ public:
 	// UMeshComponent Interface.
 	virtual int32               GetNumMaterials ( ) const override;
 	virtual UMaterialInterface* GetMaterial ( int32 ElementIndex ) const override;
-	virtual FMaterialRelevance  GetMaterialRelevance ( ERHIFeatureLevel::Type InFeatureLevel ) const override;
+	virtual FMaterialRelevance  GetMaterialRelevance ( EShaderPlatform InShaderPlatform ) const override;
 	virtual void                SetMaterial ( int32 ElementIndex , UMaterialInterface* Material ) override;
 	virtual void                GetUsedMaterials ( TArray < UMaterialInterface* >& OutMaterials , bool bGetDebugMaterials = false ) const override;
 
@@ -149,10 +142,19 @@ public:
 	//~ USceneComponent Interface.
 	virtual FBoxSphereBounds CalcBounds ( const FTransform& LocalToWorld ) const override;
 
-protected:
+protected: // Committed Data
 
-	UPROPERTY ( )
-	FLPPChunkedDynamicCompactMeshData MeshCompactData;
+	//UPROPERTY ( )
+	//FLPPChunkedDynamicCompactMeshData MeshCompactData;
+
+	//UPROPERTY ( Transient )
+	TUniquePtr < FDynamicMesh3 > CurrentMeshData = nullptr;
+
+	//UPROPERTY ( Transient )
+	UE::Geometry::FAxisAlignedBox3d LocalBounds = UE::Geometry::FAxisAlignedBox3d ( );
+
+	UPROPERTY ( Transient )
+	FKAggregateGeom AggGeom = FKAggregateGeom ( );
 
 protected:
 

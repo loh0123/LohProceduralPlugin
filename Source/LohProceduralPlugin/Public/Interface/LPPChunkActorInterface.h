@@ -3,7 +3,6 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Components/LFPGridTagDataComponent.h"
 #include "UObject/Interface.h"
 #include "LPPChunkActorInterface.generated.h"
 
@@ -27,9 +26,9 @@ class LOHPROCEDURALPLUGIN_API ILPPChunkActorInterface
 public:
 
 	UFUNCTION ( BlueprintNativeEvent , Category=Default )
-	void OnChunkIDChanged ( ULFPGridTagDataComponent* DataComponent , const int32 RegionIndex , const int32 ChunkIndex );
+	void OnChunkIDChanged ( const int32 ComponentIndex , const int32 RegionIndex , const int32 ChunkIndex );
 
-	virtual void OnChunkIDChanged_Implementation ( ULFPGridTagDataComponent* DataComponent , const int32 RegionIndex , const int32 ChunkIndex )
+	virtual void OnChunkIDChanged_Implementation ( const int32 ComponentIndex , const int32 RegionIndex , const int32 ChunkIndex )
 	{
 	};
 

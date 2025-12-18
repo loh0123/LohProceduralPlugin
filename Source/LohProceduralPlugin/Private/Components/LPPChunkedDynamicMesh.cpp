@@ -6,8 +6,10 @@
 
 #include "Components/LPPChunkedDynamicMesh.h"
 
-#include "Kismet/KismetMathLibrary.h"
 #include "Math/BoxSphereBounds.h"
+#include "PhysicsEngine/PhysicsSettings.h"
+
+LLM_DEFINE_TAG ( LFPDynamicMesh );
 
 
 // Sets default values for this component's properties
@@ -43,119 +45,37 @@ void ULPPChunkedDynamicMesh::TickComponent ( float DeltaTime , ELevelTick TickTy
 	// ...
 }
 
-void ULPPChunkedDynamicMesh::SetMesh ( FDynamicMesh3&& MoveMesh )
+void ULPPChunkedDynamicMesh::SetMesh ( FDynamicMesh3&& MoveMesh , FKAggregateGeom&& NewAggGeom )
 {
+	LLM_SCOPE_BYTAG ( LFPDynamicMesh );
+
 	SetMeshCounter += 1;
 
-	MeshCompactData = FLPPChunkedDynamicCompactMeshData ( );
+	CurrentMeshData = MakeUnique < FDynamicMesh3 > ( MoveTemp ( MoveMesh ) );
 
-	const FDynamicMesh3 DynamicMeshData = MoveTemp ( MoveMesh );
+	LocalBounds = CurrentMeshData->GetBounds ( true );
 
-	if ( DynamicMeshData.TriangleCount ( ) != 0 )
-	{
-		const int NumTriangles  = DynamicMeshData.TriangleCount ( );
-		const int NumVertices   = NumTriangles * 3;
-		const int NumUVOverlays = DynamicMeshData.HasAttributes ( ) ? DynamicMeshData.Attributes ( )->NumUVLayers ( ) : 0;
+	AggGeom = MoveTemp ( NewAggGeom );
 
-		const FDynamicMeshNormalOverlay* NormalOverlay = DynamicMeshData.HasAttributes ( ) ? DynamicMeshData.Attributes ( )->PrimaryNormals ( ) : nullptr;
-		const FDynamicMeshColorOverlay*  ColorOverlay  = DynamicMeshData.HasAttributes ( ) ? DynamicMeshData.Attributes ( )->PrimaryColors ( ) : nullptr;
-
-		const bool bHasColor    = ColorOverlay != nullptr;
-		const bool bHasTangents = DynamicMeshData.HasAttributes ( ) && DynamicMeshData.Attributes ( )->HasTangentSpace ( );
-
-		UE::Geometry::FDynamicMeshTangents Tangents ( &DynamicMeshData );
-
-		MeshCompactData = FLPPChunkedDynamicCompactMeshData ( NumVertices , bHasColor );
-
-		// populate the triangle array.  we use this for parallelism. 
-		TArray < int32 > TriangleArray;
-		{
-			TriangleArray.Reserve ( NumTriangles );
-			for ( const int32 TriangleID : DynamicMeshData.TriangleIndicesItr ( ) )
-			{
-				if ( DynamicMeshData.IsTriangle ( TriangleID ) == false )
-				{
-					continue;
-				}
-
-				TriangleArray.Add ( TriangleID );
-			}
-		}
-
-		ParallelFor ( TriangleArray.Num ( ) , [&] ( int idx )
-		{
-			const int32 TriangleID = TriangleArray [ idx ];
-
-			UE::Geometry::FIndex3i TriIndexList       = DynamicMeshData.GetTriangle ( TriangleID );
-			UE::Geometry::FIndex3i TriNormalIndexList = ( NormalOverlay != nullptr ) ? NormalOverlay->GetTriangle ( TriangleID ) : UE::Geometry::FIndex3i::Invalid ( );
-			UE::Geometry::FIndex3i TriColorIndexList  = ( ColorOverlay != nullptr ) ? ColorOverlay->GetTriangle ( TriangleID ) : UE::Geometry::FIndex3i::Invalid ( );
-
-			const int32 VertOffset = idx * 3;
-			for ( int32 IndexOffset = 0 ; IndexOffset < 3 ; ++IndexOffset )
-			{
-				const int32 ListIndex     = VertOffset + IndexOffset;
-				const int32 TriangleIndex = TriIndexList [ IndexOffset ];
-				const int32 NormalIndex   = TriNormalIndexList [ IndexOffset ];
-				const int32 ColorIndex    = TriColorIndexList [ IndexOffset ];
-
-				MeshCompactData.Position [ ListIndex ] = static_cast < FVector3f > ( DynamicMeshData.GetVertex ( TriangleIndex ) );
-				MeshCompactData.Normal [ ListIndex ]   = NormalIndex != FDynamicMesh3::InvalidID ? NormalOverlay->GetElement ( NormalIndex ) : DynamicMeshData.GetVertexNormal ( TriangleIndex );
-
-				if ( bHasColor )
-				{
-					MeshCompactData.Color [ ListIndex ] = static_cast < FLinearColor > ( ColorIndex != FDynamicMesh3::InvalidID ? ColorOverlay->GetElement ( ColorIndex ) : static_cast < FVector4f > ( DynamicMeshData.GetVertexColor ( TriangleIndex ) ) ).ToFColor ( true );
-				}
-			}
-
-			{
-				//MeshCompactData.Normal [ idx ] = NormalIndex != FDynamicMesh3::InvalidID ? NormalOverlay->GetElement ( NormalIndex ) : DynamicMeshData.GetVertexNormal ( TriangleIndex );
-				//
-				//if ( bHasTangents )
-				//{
-				//	Tangents.GetTangentVectors ( TriangleID , IndexOffset , MeshCompactData.Normal [ ListIndex ] , MeshCompactData.Tangent [ ListIndex ] , MeshCompactData.BiTangent [ ListIndex ] );
-				//}
-				//else
-				//{
-				//	UE::Geometry::VectorUtil::MakePerpVectors ( MeshCompactData.Normal [ ListIndex ] , MeshCompactData.Tangent [ ListIndex ] , MeshCompactData.BiTangent [ ListIndex ] );
-				//}
-			}
-
-			for ( int32 TexIndex = 0 ; TexIndex < 1 /*NumTexCoords */; ++TexIndex )
-			{
-				const FDynamicMeshUVOverlay* UVOverlay = DynamicMeshData.HasAttributes ( ) ? DynamicMeshData.Attributes ( )->GetUVLayer ( TexIndex ) : nullptr;
-
-				UE::Geometry::FIndex3i TriUVIndexList = ( UVOverlay != nullptr ) ? UVOverlay->GetTriangle ( TriangleID ) : UE::Geometry::FIndex3i::Invalid ( );
-
-				for ( int32 IndexOffset = 0 ; IndexOffset < 3 ; ++IndexOffset )
-				{
-					const int32 ListIndex = VertOffset + IndexOffset;
-					const int32 UVIndex   = TriUVIndexList [ IndexOffset ];
-
-					MeshCompactData.UV0 [ ListIndex ] = ( UVIndex != FDynamicMesh3::InvalidID ) ? UVOverlay->GetElement ( UVIndex ) : FVector2f::Zero ( );
-				}
-			}
-		} );
-	}
-
-	LocalBounds = DynamicMeshData.GetBounds ( true );
-
-	NotifyMeshUpdated ( DynamicMeshData );
+	NotifyMeshUpdated ( );
 }
 
 void ULPPChunkedDynamicMesh::ClearMesh ( )
 {
 	ClearMeshCounter += 1;
 
-	MeshCompactData = FLPPChunkedDynamicCompactMeshData ( );
+	CurrentMeshData.Reset ( );
+
+	//MeshCompactData = FLPPChunkedDynamicCompactMeshData ( );
 
 	InvalidatePhysicsData ( );
 
-	const FDynamicMesh3 EmptyMesh;
+	//const FDynamicMesh3 EmptyMesh;
 
-	NotifyMeshUpdated ( EmptyMesh );
+	NotifyMeshUpdated ( );
 }
 
-void ULPPChunkedDynamicMesh::NotifyMeshUpdated ( const FDynamicMesh3& MeshData )
+void ULPPChunkedDynamicMesh::NotifyMeshUpdated ( )
 {
 	RebuildPhysicsData ( );
 	MarkRenderStateDirty ( );
@@ -168,32 +88,147 @@ void ULPPChunkedDynamicMesh::NotifyMaterialSetUpdated ( )
 
 bool ULPPChunkedDynamicMesh::GetTriMeshSizeEstimates ( struct FTriMeshCollisionDataEstimates& OutTriMeshEstimates , bool bInUseAllTriData ) const
 {
-	OutTriMeshEstimates.VerticeCount = MeshCompactData.Position.Num ( );
+	OutTriMeshEstimates.VerticeCount = CurrentMeshData->VertexCount ( );
 	return true;
 }
 
 bool ULPPChunkedDynamicMesh::GetPhysicsTriMeshData ( struct FTriMeshCollisionData* CollisionData , bool InUseAllTriData )
 {
-	const int32 TriCount = MeshCompactData.Position.Num ( ) / 3;
-
-	CollisionData->Indices.Reserve ( TriCount );
-	CollisionData->Vertices.Reserve ( TriCount * 3 );
-
-	for ( int32 TriIndex = 0 ; TriIndex < TriCount ; ++TriIndex )
+	if ( bEnableComplexCollision == false )
 	{
-		const int32 TriOffset = CollisionData->Indices.Num ( ) * 3;
+		return false;
+	}
 
-		FTriIndices TriIndices;
+	// See if we should copy UVs
+	const bool bCopyUVs = UPhysicsSettings::Get ( )->bSupportUVFromHitResults && CurrentMeshData->HasAttributes ( ) && CurrentMeshData->Attributes ( )->NumUVLayers ( ) > 0;
 
-		TriIndices.v0 = TriOffset;
-		TriIndices.v1 = TriOffset + 1;
-		TriIndices.v2 = TriOffset + 2;
+	if ( bCopyUVs )
+	{
+		CollisionData->UVs.SetNum ( CurrentMeshData->Attributes ( )->NumUVLayers ( ) );
+	}
+
+	const FDynamicMeshMaterialAttribute* MaterialAttrib = CurrentMeshData->HasAttributes ( ) && CurrentMeshData->Attributes ( )->HasMaterialID ( ) ? CurrentMeshData->Attributes ( )->GetMaterialID ( ) : nullptr;
+
+	TArray < int32 > VertexMap;
+	const bool       bIsSparseV = !CurrentMeshData->IsCompactV ( );
+
+	// copy vertices
+	if ( !bCopyUVs )
+	{
+		if ( bIsSparseV )
+		{
+			VertexMap.SetNum ( CurrentMeshData->MaxVertexID ( ) );
+		}
+		CollisionData->Vertices.Reserve ( CurrentMeshData->VertexCount ( ) );
+		for ( int32 vid : CurrentMeshData->VertexIndicesItr ( ) )
+		{
+			int32 Index = CollisionData->Vertices.Add ( static_cast < FVector3f > ( CurrentMeshData->GetVertex ( vid ) ) );
+			if ( bIsSparseV )
+			{
+				VertexMap [ vid ] = Index;
+			}
+			else
+			{
+				check ( vid == Index );
+			}
+		}
+	}
+	else
+	{
+		// map vertices per wedge
+		VertexMap.SetNumZeroed ( CurrentMeshData->MaxTriangleID ( ) * 3 );
+		// temp array to store the UVs on a vertex (per triangle)
+		TArray < FVector2D >            VertUVs;
+		const FDynamicMeshAttributeSet* Attribs     = CurrentMeshData->Attributes ( );
+		const int32                     NumUVLayers = Attribs->NumUVLayers ( );
+		for ( int32 VID : CurrentMeshData->VertexIndicesItr ( ) )
+		{
+			FVector3f Pos       = static_cast < FVector3f > ( CurrentMeshData->GetVertex ( VID ) );
+			int32     VertStart = CollisionData->Vertices.Num ( );
+			CurrentMeshData->EnumerateVertexTriangles ( VID , [&] ( int32 TID )
+			{
+				UE::Geometry::FIndex3i Tri     = CurrentMeshData->GetTriangle ( TID );
+				int32                  VSubIdx = Tri.IndexOf ( VID );
+				// Get the UVs on this wedge
+				VertUVs.Reset ( 8 );
+				for ( int32 UVIdx = 0 ; UVIdx < NumUVLayers ; ++UVIdx )
+				{
+					const FDynamicMeshUVOverlay* Overlay = Attribs->GetUVLayer ( UVIdx );
+					UE::Geometry::FIndex3i       UVTri   = Overlay->GetTriangle ( TID );
+					int32                        ElID    = UVTri [ VSubIdx ];
+					FVector2D                    UV ( 0 , 0 );
+					if ( ElID >= 0 )
+					{
+						UV = static_cast < FVector2D > ( Overlay->GetElement ( ElID ) );
+					}
+					VertUVs.Add ( UV );
+				}
+				// Check if we've already added these UVs via an earlier wedge
+				int32 OutputVIdx = INDEX_NONE;
+				for ( int32 VIdx = VertStart ; VIdx < CollisionData->Vertices.Num ( ) ; ++VIdx )
+				{
+					bool bFound = true;
+					for ( int32 UVIdx = 0 ; UVIdx < NumUVLayers ; ++UVIdx )
+					{
+						if ( CollisionData->UVs [ UVIdx ] [ VIdx ] != VertUVs [ UVIdx ] )
+						{
+							bFound = false;
+							break;
+						}
+					}
+					if ( bFound )
+					{
+						OutputVIdx = VIdx;
+						break;
+					}
+				}
+				// If not, add the vertex w/ the UVs
+				if ( OutputVIdx == INDEX_NONE )
+				{
+					OutputVIdx = CollisionData->Vertices.Add ( Pos );
+					for ( int32 UVIdx = 0 ; UVIdx < NumUVLayers ; ++UVIdx )
+					{
+						CollisionData->UVs [ UVIdx ].Add ( VertUVs [ UVIdx ] );
+					}
+				}
+				// Map the wedge to the output vertex
+				VertexMap [ TID * 3 + VSubIdx ] = OutputVIdx;
+			} );
+		}
+	}
+
+	// copy triangles
+	CollisionData->Indices.Reserve ( CurrentMeshData->TriangleCount ( ) );
+	CollisionData->MaterialIndices.Reserve ( CurrentMeshData->TriangleCount ( ) );
+	for ( int32 tid : CurrentMeshData->TriangleIndicesItr ( ) )
+	{
+		UE::Geometry::FIndex3i Tri = CurrentMeshData->GetTriangle ( tid );
+		FTriIndices            Triangle;
+		if ( bCopyUVs )
+		{
+			// UVs need a wedge-based map
+			Triangle.v0 = VertexMap [ tid * 3 + 0 ];
+			Triangle.v1 = VertexMap [ tid * 3 + 1 ];
+			Triangle.v2 = VertexMap [ tid * 3 + 2 ];
+		}
+		else if ( bIsSparseV )
+		{
+			Triangle.v0 = VertexMap [ Tri.A ];
+			Triangle.v1 = VertexMap [ Tri.B ];
+			Triangle.v2 = VertexMap [ Tri.C ];
+		}
+		else
+		{
+			Triangle.v0 = Tri.A;
+			Triangle.v1 = Tri.B;
+			Triangle.v2 = Tri.C;
+		}
 
 		// Filter out triangles which will cause physics system to emit degenerate-geometry warnings.
 		// These checks reproduce tests in Chaos::CleanTrimesh
-		const FVector3f& A = MeshCompactData.Position [ TriIndex ];
-		const FVector3f& B = MeshCompactData.Position [ TriIndex + 1 ];
-		const FVector3f& C = MeshCompactData.Position [ TriIndex + 2 ];
+		const FVector3f& A = CollisionData->Vertices [ Triangle.v0 ];
+		const FVector3f& B = CollisionData->Vertices [ Triangle.v1 ];
+		const FVector3f& C = CollisionData->Vertices [ Triangle.v2 ];
 		if ( A == B || A == C || B == C )
 		{
 			continue;
@@ -205,24 +240,22 @@ bool ULPPChunkedDynamicMesh::GetPhysicsTriMeshData ( struct FTriMeshCollisionDat
 			continue;
 		}
 
-		CollisionData->Indices.Add ( TriIndices );
-		CollisionData->Vertices.Add ( A );
-		CollisionData->Vertices.Add ( B );
-		CollisionData->Vertices.Add ( C );
+		CollisionData->Indices.Add ( Triangle );
+
+		int32 MaterialID = MaterialAttrib ? MaterialAttrib->GetValue ( tid ) : 0;
+		CollisionData->MaterialIndices.Add ( MaterialID );
 	}
 
-	CollisionData->MaterialIndices.Init ( 0 , CollisionData->Indices.Num ( ) );
-
 	CollisionData->bFlipNormals    = true;
-	CollisionData->bDeformableMesh = false;
-	CollisionData->bFastCook       = false;
+	CollisionData->bDeformableMesh = true;
+	CollisionData->bFastCook       = true;
 
 	return true;
 }
 
 bool ULPPChunkedDynamicMesh::ContainsPhysicsTriMeshData ( bool InUseAllTriData ) const
 {
-	return MeshCompactData.Position.Num ( ) > 2 && bEnableComplexCollision;
+	return CurrentMeshData.IsValid ( ) && bEnableComplexCollision;
 }
 
 bool ULPPChunkedDynamicMesh::WantsNegXTriMesh ( )
@@ -265,7 +298,7 @@ void ULPPChunkedDynamicMesh::RebuildPhysicsData ( )
 
 	MeshBodySetup->AbortPhysicsMeshAsyncCreation ( );
 
-	if ( MeshCompactData.Position.Num ( ) > 2 && bEnableComplexCollision )
+	if ( CurrentMeshData.IsValid ( ) && bEnableComplexCollision )
 	{
 		MeshBodySetup->CreatePhysicsMeshesAsync ( FOnAsyncPhysicsCookFinished::CreateUObject ( this , &ULPPChunkedDynamicMesh::FinishPhysicsAsyncCook , MeshBodySetup.Get ( ) ) );
 	}
@@ -331,9 +364,9 @@ UMaterialInterface* ULPPChunkedDynamicMesh::GetMaterial ( int32 ElementIndex ) c
 	return ( ElementIndex >= 0 && ElementIndex < BaseMaterials.Num ( ) ) ? BaseMaterials [ ElementIndex ] : nullptr;
 }
 
-FMaterialRelevance ULPPChunkedDynamicMesh::GetMaterialRelevance ( ERHIFeatureLevel::Type InFeatureLevel ) const
+FMaterialRelevance ULPPChunkedDynamicMesh::GetMaterialRelevance ( EShaderPlatform InShaderPlatform ) const
 {
-	return UMeshComponent::GetMaterialRelevance ( InFeatureLevel );
+	return UMeshComponent::GetMaterialRelevance ( InShaderPlatform );
 }
 
 void ULPPChunkedDynamicMesh::SetMaterial ( int32 ElementIndex , UMaterialInterface* Material )
@@ -388,49 +421,14 @@ FLPPChunkedDynamicMeshProxy* ULPPChunkedDynamicMesh::GetBaseSceneProxy ( ) const
 
 FPrimitiveSceneProxy* ULPPChunkedDynamicMesh::CreateSceneProxy ( )
 {
+	LLM_SCOPE_BYTAG ( LFPDynamicMesh );
+
 	// if this is not always the case, we have made incorrect assumptions
 	ensure ( GetSceneProxy() == nullptr );
 
 	FLPPChunkedDynamicMeshProxy* NewProxy = new FLPPChunkedDynamicMeshProxy ( this , DistanceFieldSelfShadowBias );
 
-	NewProxy->Initialize ( [&] (
-	                      TArray < FVector3f >& PositionList ,
-	                      TArray < uint32 >&    IndexList ,
-	                      TArray < FVector2f >& UV0List ,
-	                      TArray < FColor >&    ColorList ,
-	                      TArray < FVector3f >& NormalList ,
-	                      TArray < FVector3f >& TangentList ,
-	                      TArray < FVector3f >& BiTangentList
-	                      )
-	                      {
-		                      if ( MeshCompactData.Position.IsEmpty ( ) )
-		                      {
-			                      return false;
-		                      }
-
-		                      PositionList = MeshCompactData.Position;
-		                      UV0List      = MeshCompactData.UV0;
-		                      ColorList    = MeshCompactData.Color;
-		                      NormalList   = MeshCompactData.Normal;
-		                      //TangentList   = MeshCompactData.Tangent;
-		                      //BiTangentList = MeshCompactData.BiTangent;
-
-		                      //NormalList.AddUninitialized ( MeshCompactData.Position.Num ( ) );
-		                      TangentList.AddUninitialized ( MeshCompactData.Position.Num ( ) );
-		                      BiTangentList.AddUninitialized ( MeshCompactData.Position.Num ( ) );
-
-		                      IndexList.Reserve ( MeshCompactData.Position.Num ( ) );
-
-		                      for ( int32 Index = 0 ; Index < MeshCompactData.Position.Num ( ) ; ++Index )
-		                      {
-			                      IndexList.Add ( Index );
-
-			                      UE::Geometry::VectorUtil::MakePerpVectors ( MeshCompactData.Normal [ Index ] , TangentList [ Index ] , BiTangentList [ Index ] );
-		                      }
-
-		                      return true;
-	                      }
-	                     );
+	NewProxy->InitializeFromMesh ( CurrentMeshData.Get ( ) );
 
 	return NewProxy;
 }
@@ -440,7 +438,7 @@ FBoxSphereBounds ULPPChunkedDynamicMesh::CalcBounds ( const FTransform& LocalToW
 	// can get a tighter box by calculating in world space, but we care more about performance
 	FBox             LocalBoundingBox = static_cast < FBox > ( LocalBounds );
 	FBoxSphereBounds Ret ( LocalBoundingBox.TransformBy ( LocalToWorld ) );
-	Ret.BoxExtent *= BoundsScale;
+	Ret.BoxExtent    *= BoundsScale;
 	Ret.SphereRadius *= BoundsScale;
 	return Ret;
 }

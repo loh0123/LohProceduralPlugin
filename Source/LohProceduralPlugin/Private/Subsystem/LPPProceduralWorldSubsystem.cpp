@@ -47,7 +47,7 @@ TStatId ULPPProceduralWorldSubsystem::GetStatId ( ) const
 	RETURN_QUICK_DECLARE_CYCLE_STAT ( ULPPChunkManagerSubsystem , STATGROUP_Tickables );
 }
 
-TWeakPtr < FProceduralWorldComputeJob > ULPPProceduralWorldSubsystem::LaunchJob ( const TCHAR* DebugName , const TFunction < void  ( FProgressCancel& Progress , TQueue < TFunction < void  ( ) > , EQueueMode::Mpsc >& GameThreadJob ) >& JobWork )
+TWeakPtr < FProceduralWorldComputeJob > ULPPProceduralWorldSubsystem::LaunchJob ( const TCHAR* DebugName , const TFunction < void  ( FProgressCancel& Progress , TQueue < TFunction < void  ( ) > , EQueueMode::Mpsc >& GameThreadJob ) >& JobWork , const bool bSingleThreadMode )
 {
 	check ( IsInGameThread ( ) ); // Must In Game Thread
 
@@ -75,10 +75,20 @@ TWeakPtr < FProceduralWorldComputeJob > ULPPProceduralWorldSubsystem::LaunchJob 
 	NewJob->Progress->CancelF                        = [this, JobPtr] ( ) { return bIsShuttingDown || JobPtr->bCancelled; };
 	NewJob->DebugName                                = DebugName;
 	NewJob->JobWork                                  = JobWork;
-	NewJob->Task                                     = LaunchJobInternal ( NewJob.Get ( ) );
+
+	if ( bSingleThreadMode )
+	{
+		NewJob->JobWork ( *JobPtr->Progress , LazyGameThreadJobQueue );
+		NewJob->bHasCompleted = true;
+	}
+	else
+	{
+		NewJob->Task = LaunchJobInternal ( NewJob.Get ( ) );
+	}
 
 	// add a new job
-	FScopeLock                              AddJob ( &PendingJobsLock );
+	FScopeLock AddJob ( &PendingJobsLock );
+
 	TWeakPtr < FProceduralWorldComputeJob > ResultData = PendingJobs.Add_GetRef ( MoveTemp ( NewJob ) );
 
 	return ResultData;

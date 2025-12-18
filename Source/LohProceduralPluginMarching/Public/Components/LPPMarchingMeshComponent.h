@@ -13,7 +13,11 @@
 #include "Subsystem/LPPProceduralWorldSubsystem.h"
 #include "LPPMarchingMeshComponent.generated.h"
 
+class ULFPChunkedGridPositionComponent;
+class ULFPChunkedTagDataComponent;
 class ULPPMarchingData;
+
+LLM_DECLARE_TAG ( LFPMarchingMesh );
 
 struct FLFPMarchingRendererFaceDirection
 {
@@ -106,14 +110,22 @@ public:
 
 	uint16 DataID = 0;
 
-	FDynamicMesh3 MeshData = FDynamicMesh3 ( );
+	FDynamicMesh3 MeshData = FDynamicMesh3 ( UE::Geometry::EMeshComponents::FaceGroups );
 
 	TArray < FLumenCardBuildData > LumenCardData = TArray < FLumenCardBuildData > ( );
 	FBox                           LumenBound    = FBox ( );
 
 	TArray < FKBoxElem > CollisionBoxElems;
 
-	FDateTime StartTime = FDateTime ( );
+	FDateTime StartTime  = FDateTime ( );
+	uint32    WorkLenght = 0;
+
+public:
+
+	uint32 GetByteCount ( ) const
+	{
+		return sizeof ( FLFPMarchingThreadData ) + MeshData.GetByteCount ( ) + ( sizeof ( FLumenCardBuildData ) * LumenCardData.Num ( ) ) + ( sizeof ( FKBoxElem ) * CollisionBoxElems.Num ( ) );
+	}
 };
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam ( FLFPOnMarchingMeshGenerateEvent , USceneComponent* , Component );
@@ -208,7 +220,10 @@ protected:
 protected:
 
 	UPROPERTY ( Transient )
-	TObjectPtr < class ULFPGridTagDataComponent > DataComponent = nullptr;
+	TObjectPtr < ULFPChunkedTagDataComponent > DataComponent = nullptr;
+
+	UPROPERTY ( Transient )
+	TObjectPtr < ULFPChunkedGridPositionComponent > PositionComponent = nullptr;
 
 	UPROPERTY ( Transient )
 	int32 RegionIndex = INDEX_NONE;
@@ -241,7 +256,7 @@ protected:
 public:
 
 	UFUNCTION ( BlueprintCallable , Category="LFPVoxelRender" )
-	void Initialize ( ULFPGridTagDataComponent* NewDataComponent , const int32 NewRegionIndex , const int32 NewChunkIndex );
+	void Initialize ( ULFPChunkedTagDataComponent* NewDataComponent , ULFPChunkedGridPositionComponent* NewPositionComponent , const int32 NewRegionIndex , const int32 NewChunkIndex );
 
 	UFUNCTION ( BlueprintCallable , Category="LFPVoxelRender" )
 	void Uninitialize ( );
@@ -257,7 +272,7 @@ public:
 protected:
 
 	// Add Mesh Fill
-	void UpdateDistanceField ( const FDynamicMesh3& ReadMesh );
+	void UpdateDistanceField ( );
 
 protected:
 
@@ -265,7 +280,7 @@ protected:
 
 public:
 
-	virtual void NotifyMeshUpdated ( const FDynamicMesh3& MeshData ) override;
+	virtual void NotifyMeshUpdated ( ) override;
 
 private:
 
@@ -273,13 +288,14 @@ private:
 
 	FCriticalSection ThreadDataLock;
 
-	TSharedPtr < FLFPMarchingThreadData > LocalThreadData = nullptr;
+	TArray < FLumenCardBuildData > CurrentLumenCardData = TArray < FLumenCardBuildData > ( );
+	FBox                           CurrentLumenBound    = FBox ( );
 
 	TAsyncMarchingData MeshComputeData = TAsyncMarchingData ( this );
 
-	static TUniquePtr < FLFPMarchingThreadData > ComputeNewMarchingMesh_TaskFunction ( FProgressCancel& Progress , const TBitArray < >& SolidList , const FLFPMarchingPassData& PassData );
+	static void ComputeNewMarchingMesh_TaskFunction ( TUniquePtr < FLFPMarchingThreadData >& ThreadData , FProgressCancel& Progress , const TBitArray < >& SolidList , const FLFPMarchingPassData& PassData );
 
-	void ComputeNewMarchingMesh_Completed ( TUniquePtr < FLFPMarchingThreadData > ThreadData , TQueue < TFunction < void  ( ) > , EQueueMode::Mpsc >& GameThreadJob );
+	void ComputeNewMarchingMesh_Completed ( TUniquePtr < FLFPMarchingThreadData >& ThreadData , TQueue < TFunction < void  ( ) > , EQueueMode::Mpsc >& GameThreadJob );
 
 private:
 
@@ -289,7 +305,7 @@ private:
 
 	FCriticalSection DistanceFieldDataLock;
 
-	TSharedPtr < FDistanceFieldVolumeData > DistanceFieldData = nullptr;
+	TSharedPtr < FDistanceFieldVolumeData , ESPMode::ThreadSafe > DistanceFieldData = nullptr;
 
 	TAsyncMarchingData DistanceFieldComputeData = TAsyncMarchingData ( this );
 

@@ -40,7 +40,7 @@ public:
 
 public:
 
-	TWeakPtr < FProceduralWorldComputeJob > LaunchJob ( const TCHAR* DebugName , const TFunction < void  ( FProgressCancel& Progress , TQueue < TFunction < void  ( ) > , EQueueMode::Mpsc >& GameThreadJob ) >& JobWork );
+	TWeakPtr < FProceduralWorldComputeJob > LaunchJob ( const TCHAR* DebugName , const TFunction < void  ( FProgressCancel& Progress , TQueue < TFunction < void  ( ) > , EQueueMode::Mpsc >& GameThreadJob ) >& JobWork , const bool bSingleThreadMode );
 
 protected:
 
@@ -101,7 +101,7 @@ struct TAsyncMarchingData
 		LastPendingJobs = nullptr;
 	}
 
-	FORCEINLINE void LaunchJob ( const TCHAR* DebugName , const TFunction < void  ( FProgressCancel& Progress , TQueue < TFunction < void  ( ) > , EQueueMode::Mpsc >& GameThreadJob ) >& JobWork )
+	FORCEINLINE void LaunchJob ( const TCHAR* DebugName , const TFunction < void  ( FProgressCancel& Progress , TQueue < TFunction < void  ( ) > , EQueueMode::Mpsc >& GameThreadJob ) >& JobWork , const bool bSingleThreadMode = false )
 	{
 		check ( Outer.IsExplicitlyNull() == false );
 
@@ -114,7 +114,7 @@ struct TAsyncMarchingData
 
 		if ( Subsystem->bIsShuttingDown == false )
 		{
-			LastPendingJobs = Subsystem->LaunchJob ( DebugName , JobWork );
+			LastPendingJobs = Subsystem->LaunchJob ( DebugName , JobWork , bSingleThreadMode );
 		}
 		else
 		{

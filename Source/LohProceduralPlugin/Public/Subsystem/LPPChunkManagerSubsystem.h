@@ -8,6 +8,8 @@
 #include "CoreMinimal.h"
 #include "LPPChunkManagerSubsystem.generated.h"
 
+class ULFPChunkedTagDataComponent;
+class ULFPChunkedGridPositionComponent;
 class ULFPGridTagDataComponent;
 class ULPPChunkController;
 
@@ -54,8 +56,14 @@ public:
 
 public:
 
-	UFUNCTION ( BlueprintCallable , Category = "Default" )
-	void SetupChunkManager ( const TArray < ULFPGridTagDataComponent* >& NewDataComponentList , const TSubclassOf < AActor > NewChunkActorClass , const FVector& NewSpawnOffset , const FVector& ChunkDataSize );
+	UFUNCTION ( BlueprintCallable , Category = "Default" , meta=(AutoCreateRefTerm="NewSpawnOffset,ChunkDataSize") )
+	void SetupChunkManager (
+		const TArray < ULFPChunkedTagDataComponent* >&      NewDataComponentList ,
+		const TArray < ULFPChunkedGridPositionComponent* >& NewPositionComponentList ,
+		const TSubclassOf < AActor >                        NewChunkActorClass ,
+		const FVector&                                      NewSpawnOffset ,
+		const FVector&                                      ChunkDataSize
+		);
 
 public:
 
@@ -63,7 +71,15 @@ public:
 	FVector GetChunkLocation ( const int32 ComponentIndex , const int32 RegionIndex , const int32 ChunkIndex ) const;
 
 	UFUNCTION ( BlueprintPure , Category = "Default" )
-	ULFPGridTagDataComponent* GetDataComponent ( const int32 ComponentIndex ) const;
+	ULFPChunkedTagDataComponent* GetDataComponent ( const int32 ComponentIndex ) const;
+
+	UFUNCTION ( BlueprintPure , Category = "Default" )
+	ULFPChunkedGridPositionComponent* GetPositionComponent ( const int32 ComponentIndex ) const;
+
+public:
+
+	UFUNCTION ( BlueprintCallable , Category = "Default" )
+	void LoadRegion ( const int32 ComponentIndex , const int32 RegionIndex , AActor* LoaderActor );
 
 public:
 
@@ -84,7 +100,7 @@ protected:
 	void NotifyChunkLoad ( const int32 ComponentIndex , const int32 RegionIndex , const int32 ChunkIndex ) const;
 
 	UFUNCTION ( )
-	void NotifyChunkUnload ( AActor* UnloadActor ) const;
+	void NotifyChunkUnload ( const int32 ComponentIndex , const int32 RegionIndex , const int32 ChunkIndex ) const;
 
 	UFUNCTION ( )
 	void NotifyChunkUpdate ( const int32 ComponentIndex , const int32 RegionIndex , const int32 ChunkIndex , const TArray < int32 >& DataIndexList ) const;
@@ -103,7 +119,10 @@ protected:
 	TArray < TObjectPtr < AActor > > AvailableChunkList;
 
 	UPROPERTY ( Transient )
-	TArray < TObjectPtr < ULFPGridTagDataComponent > > DataComponentList;
+	TArray < TObjectPtr < ULFPChunkedTagDataComponent > > DataComponentList;
+
+	UPROPERTY ( Transient )
+	TArray < TObjectPtr < ULFPChunkedGridPositionComponent > > PositionComponentList;
 
 	UPROPERTY ( Transient )
 	TArray < float > ComponentHeightList;
