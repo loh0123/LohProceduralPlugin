@@ -212,10 +212,19 @@ protected:
 	bool bGenerateDistanceField = false;
 
 	UPROPERTY ( EditDefaultsOnly , Category="Setting|DistanceField" )
+	bool bTwoSideDistanceField = false;
+
+	UPROPERTY ( EditDefaultsOnly , Category="Setting|DistanceField" )
 	float DistanceFieldResolutionScale = 1.0f;
 
 	UPROPERTY ( EditDefaultsOnly , Category="Setting|DistanceField" )
 	float DistanceFieldBatchTime = 1.0f;
+
+	UPROPERTY ( EditDefaultsOnly , Category="Setting|DistanceField" )
+	float DistanceFieldPriorityDistance = 3200.0f;
+
+	UPROPERTY ( EditDefaultsOnly , Category="Setting|DistanceField" )
+	TObjectPtr < UStaticMesh > DistanceFieldFallBackMesh = nullptr;
 
 protected:
 
@@ -310,8 +319,8 @@ private:
 	TAsyncMarchingData DistanceFieldComputeData = TAsyncMarchingData ( this );
 
 	// Modify to use ParallelFor. Copy from dynamic mesh
-	static TUniquePtr < FDistanceFieldVolumeData > ComputeNewDistanceField_TaskFunctionV2 ( FProgressCancel& Progress , const FDynamicMesh3& Mesh , const bool bGenerateAsIfTwoSided , const float CurrentDistanceFieldResolutionScale );
+	static void ComputeNewDistanceField_TaskFunctionV2 ( TUniquePtr < FDistanceFieldVolumeData >& NewData , FProgressCancel& Progress , const FDynamicMesh3& Mesh , const bool bGenerateAsIfTwoSided , const float CurrentDistanceFieldResolutionScale );
 
 	// Add Safety
-	void ComputeNewDistanceFieldData_Completed ( TUniquePtr < FDistanceFieldVolumeData > NewData , TQueue < TFunction < void  ( ) > , EQueueMode::Mpsc >& GameThreadJob );
+	void ComputeNewDistanceFieldData_Completed ( TUniquePtr < FDistanceFieldVolumeData >& NewData , TQueue < TFunction < void  ( ) > , EQueueMode::Mpsc >& GameThreadJob );
 };

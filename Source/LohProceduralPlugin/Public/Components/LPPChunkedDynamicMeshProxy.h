@@ -135,7 +135,7 @@ public:
 
 public:
 
-	LOHPROCEDURALPLUGIN_API void SetDistanceFieldData ( const TSharedPtr < FDistanceFieldVolumeData >& InDistanceFieldData );
+	LOHPROCEDURALPLUGIN_API void SetDistanceFieldData ( const TSharedPtr < FDistanceFieldVolumeData >& InDistanceFieldData , const float Bias );
 
 	LOHPROCEDURALPLUGIN_API void SetLumenData ( const TArray < class FLumenCardBuildData >& InLumenCardData , const FBox& InLumenBound );
 

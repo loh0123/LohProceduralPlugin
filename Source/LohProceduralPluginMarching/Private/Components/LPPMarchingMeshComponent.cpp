@@ -283,7 +283,7 @@ void ULPPMarchingMeshComponent::UpdateDistanceField ( )
 	{
 		FScopeLock Lock ( &ThreadDataLock );
 
-		if ( DistanceFieldResolutionScale <= 0.0f || CurrentMeshData.IsValid ( ) == false || IsDataComponentValid ( ) == false )
+		if ( DistanceFieldResolutionScale <= 0.0f || CurrentMeshData.IsValid ( ) == false || CurrentMeshData->TriangleCount ( ) == 0 || IsDataComponentValid ( ) == false )
 		{
 			DistanceFieldComputeData.CancelJob ( );
 			DistanceFieldData.Reset ( );
@@ -298,9 +298,20 @@ void ULPPMarchingMeshComponent::UpdateDistanceField ( )
 	FDynamicMesh3 GeoOnlyCopy;
 
 	// Compute whether the mesh uses mainly two-sided materials before, as this is the only info the distance field compute needs from the mesh attributes
-	bool bMostlyTwoSided = IsValid ( GetMaterial ( 0 ) ) ? GetMaterial ( 0 )->IsTwoSided ( ) : false;
+	bool bMostlyTwoSided = bTwoSideDistanceField || IsValid ( GetMaterial ( 0 ) ) ? GetMaterial ( 0 )->IsTwoSided ( ) : false;
 
 	GeoOnlyCopy.Copy ( *CurrentMeshData.Get ( ) , false , false , false , false );
+
+	float CurrentDistanceFieldBatchTime = DistanceFieldBatchTime;
+	{
+		if ( IsValid ( GetWorld ( ) ) && IsValid ( GetWorld ( )->GetFirstPlayerController ( ) ) )
+		{
+			const auto  PlayerLocation = GetWorld ( )->GetFirstPlayerController ( )->K2_GetActorLocation ( );
+			const float PriorityTime   = FMath::Max ( FVector::Distance ( PlayerLocation , GetComponentLocation ( ) ) / DistanceFieldPriorityDistance , 1.0f );
+
+			CurrentDistanceFieldBatchTime *= PriorityTime;
+		}
+	}
 
 	GetWorld ( )->GetTimerManager ( ).SetTimer ( DistanceFieldBatchHandler , [this , GeoOnlyCopy , bMostlyTwoSided] ( ) mutable
 	{
@@ -399,17 +410,21 @@ void ULPPMarchingMeshComponent::UpdateDistanceField ( )
 			}
 		}
 
+		const float CurrentDistanceFieldResolutionScale = DistanceFieldResolutionScale;
+
 		DistanceFieldComputeData.LaunchJob ( TEXT ( "MarchingDynamicMeshComponentDistanceField" ) ,
-		                                     [this,MovedGeoOnlyCopy = MoveTemp ( GeoOnlyCopy ), CurrentDistanceFieldResolutionScale = DistanceFieldResolutionScale, bMostlyTwoSided] ( FProgressCancel& Progress , TQueue < TFunction < void  ( ) > , EQueueMode::Mpsc >& GameThreadJob )
+		                                     [this,MovedGeoOnlyCopy = MoveTemp ( GeoOnlyCopy ), CurrentDistanceFieldResolutionScale, bMostlyTwoSided] ( FProgressCancel& Progress , TQueue < TFunction < void  ( ) > , EQueueMode::Mpsc >& GameThreadJob )
 		                                     {
-			                                     TUniquePtr < FDistanceFieldVolumeData > ThreadData = ComputeNewDistanceField_TaskFunctionV2 ( Progress , MovedGeoOnlyCopy , bMostlyTwoSided , CurrentDistanceFieldResolutionScale );
+			                                     TUniquePtr < FDistanceFieldVolumeData > ThreadData = MakeUnique < FDistanceFieldVolumeData > ( );
+
+			                                     ComputeNewDistanceField_TaskFunctionV2 ( ThreadData , Progress , MovedGeoOnlyCopy , bMostlyTwoSided , CurrentDistanceFieldResolutionScale );
 
 			                                     if ( Progress.Cancelled ( ) == false )
 			                                     {
-				                                     ComputeNewDistanceFieldData_Completed ( MoveTemp ( ThreadData ) , GameThreadJob );
+				                                     ComputeNewDistanceFieldData_Completed ( ThreadData , GameThreadJob );
 			                                     }
 		                                     } );
-	} , DistanceFieldBatchTime , false );
+	} , CurrentDistanceFieldBatchTime , false );
 }
 
 FPrimitiveSceneProxy* ULPPMarchingMeshComponent::CreateSceneProxy ( )
@@ -426,15 +441,30 @@ FPrimitiveSceneProxy* ULPPMarchingMeshComponent::CreateSceneProxy ( )
 		return NewProxy;
 	}
 
-	if ( FLPPChunkedDynamicMeshProxy* NewDynamicProxy = static_cast < FLPPChunkedDynamicMeshProxy* > ( NewProxy ) ; NewDynamicProxy != nullptr )
+	if ( FLPPChunkedDynamicMeshProxy* NewDynamicProxy = static_cast < FLPPChunkedDynamicMeshProxy* > ( NewProxy ) ; NewDynamicProxy != nullptr && CurrentMeshData.IsValid ( ) )
 	{
 		// Setup Distance Field
+		if ( bGenerateDistanceField )
 		{
 			FScopeLock Lock ( &DistanceFieldDataLock );
 
 			if ( DistanceFieldData.IsValid ( ) )
 			{
-				NewDynamicProxy->SetDistanceFieldData ( DistanceFieldData );
+				NewDynamicProxy->SetDistanceFieldData ( DistanceFieldData , DistanceFieldSelfShadowBias );
+			}
+			else if (
+				IsValid ( DistanceFieldFallBackMesh ) &&
+				CurrentMeshData->TriangleCount ( ) > 0 &&
+				DistanceFieldFallBackMesh->IsCompiling ( ) == false &&
+				DistanceFieldFallBackMesh->GetRenderData ( ) != nullptr &&
+				DistanceFieldFallBackMesh->GetRenderData ( )->GetCurrentFirstLOD ( 0 )->DistanceFieldData != nullptr
+			)
+			{
+				DistanceFieldData = MakeShared < FDistanceFieldVolumeData > ( );
+
+				*DistanceFieldData = *DistanceFieldFallBackMesh->GetRenderData ( )->GetCurrentFirstLOD ( 0 )->DistanceFieldData; // Copy Data
+
+				NewDynamicProxy->SetDistanceFieldData ( DistanceFieldData , DistanceFieldSelfShadowBias );
 			}
 		}
 
@@ -1001,7 +1031,7 @@ void ULPPMarchingMeshComponent::ComputeNewMarchingMesh_Completed ( TUniquePtr < 
 
 				//const float CompactMetric = NewThreadData->MeshData.CompactMetric ( );
 
-				//UE_LOG ( LogTemp , Warning , TEXT("Marching Data : %s") , *LocalThreadData->MeshData.MeshInfoString ( ) );
+				//UE_LOG ( LogTemp , Warning , TEXT("Marching Data : %s") , *TempThreadData->MeshData.MeshInfoString ( ) );
 
 				//UE_LOG ( LogTemp , Warning , TEXT("Marching Data Collision : %i") , LocalThreadData->CollisionBoxElems.Num ( ) );
 
@@ -1023,27 +1053,26 @@ void ULPPMarchingMeshComponent::ComputeNewMarchingMesh_Completed ( TUniquePtr < 
 	}
 }
 
-TUniquePtr < FDistanceFieldVolumeData > ULPPMarchingMeshComponent::ComputeNewDistanceField_TaskFunctionV2 ( FProgressCancel& Progress , const FDynamicMesh3& Mesh , const bool bGenerateAsIfTwoSided , const float CurrentDistanceFieldResolutionScale )
+void ULPPMarchingMeshComponent::ComputeNewDistanceField_TaskFunctionV2 ( TUniquePtr < FDistanceFieldVolumeData >& NewData , FProgressCancel& Progress , const FDynamicMesh3& Mesh , const bool bGenerateAsIfTwoSided , const float CurrentDistanceFieldResolutionScale )
 {
 	if ( Progress.Cancelled ( ) )
 	{
-		return nullptr;
+		return;
 	}
 
-	TUniquePtr < FDistanceFieldVolumeData > NewDistanceField = MakeUnique < FDistanceFieldVolumeData > ( );
-	FDistanceFieldVolumeData&               VolumeDataOut    = *NewDistanceField;
+	FDistanceFieldVolumeData& VolumeDataOut = *NewData.Get ( );
 
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE ( DynamicMesh_GenerateSignedDistanceFieldVolumeData );
 
 		if ( DoesProjectSupportDistanceFields ( ) == false )
 		{
-			return nullptr;
+			return;
 		}
 
 		if ( CurrentDistanceFieldResolutionScale <= 0 )
 		{
-			return nullptr;
+			return;
 		}
 
 		const double StartTime = FPlatformTime::Seconds ( );
@@ -1056,13 +1085,13 @@ TUniquePtr < FDistanceFieldVolumeData > ULPPMarchingMeshComponent::ComputeNewDis
 		UE::Geometry::FDynamicMeshAABBTree3 Spatial ( &Mesh , true ); // Find Nearby Triangle
 		if ( Progress.Cancelled ( ) )
 		{
-			return nullptr;
+			return;
 		}
 		UE::Geometry::FAxisAlignedBox3d                  MeshBounds = Spatial.GetBoundingBox ( );
 		UE::Geometry::TFastWindingTree < FDynamicMesh3 > WindingTree ( &Spatial , true ); // Find Is Inside Or Not
 		if ( Progress.Cancelled ( ) )
 		{
-			return nullptr;
+			return;
 		}
 
 		static const auto CVar       = IConsoleManager::Get ( ).FindTConsoleVariableDataInt ( TEXT ( "r.DistanceFields.MaxPerMeshResolution" ) );
@@ -1150,7 +1179,7 @@ TUniquePtr < FDistanceFieldVolumeData > ULPPMarchingMeshComponent::ComputeNewDis
 		{
 			if ( Progress.Cancelled ( ) )
 			{
-				return nullptr;
+				return;
 			}
 
 			const FIntVector IndirectionDimensions = FIntVector (
@@ -1190,7 +1219,7 @@ TUniquePtr < FDistanceFieldVolumeData > ULPPMarchingMeshComponent::ComputeNewDis
 
 			if ( Progress.Cancelled ( ) )
 			{
-				return nullptr;
+				return;
 			}
 
 			// compute bricks now
@@ -1254,7 +1283,7 @@ TUniquePtr < FDistanceFieldVolumeData > ULPPMarchingMeshComponent::ComputeNewDis
 
 			if ( Progress.Cancelled ( ) )
 			{
-				return nullptr;
+				return;
 			}
 
 			FSparseDistanceFieldMip& OutMip = VolumeDataOut.Mips [ MipIndex ];
@@ -1288,7 +1317,7 @@ TUniquePtr < FDistanceFieldVolumeData > ULPPMarchingMeshComponent::ComputeNewDis
 
 			if ( Progress.Cancelled ( ) )
 			{
-				return nullptr;
+				return;
 			}
 
 			for ( int32 BrickIndex = 0 ; BrickIndex < ValidBricks.Num ( ) ; BrickIndex++ )
@@ -1333,7 +1362,7 @@ TUniquePtr < FDistanceFieldVolumeData > ULPPMarchingMeshComponent::ComputeNewDis
 
 			if ( Progress.Cancelled ( ) )
 			{
-				return nullptr;
+				return;
 			}
 
 			OutMip.IndirectionDimensions          = IndirectionDimensions;
@@ -1356,7 +1385,7 @@ TUniquePtr < FDistanceFieldVolumeData > ULPPMarchingMeshComponent::ComputeNewDis
 
 		if ( Progress.Cancelled ( ) )
 		{
-			return nullptr;
+			return;
 		}
 
 		VolumeDataOut.StreamableMips.Lock ( LOCK_READ_WRITE );
@@ -1380,14 +1409,14 @@ TUniquePtr < FDistanceFieldVolumeData > ULPPMarchingMeshComponent::ComputeNewDis
 
 		if ( Progress.Cancelled ( ) )
 		{
-			return nullptr;
+			return;
 		}
 	}
 
-	return NewDistanceField;
+	return;
 }
 
-void ULPPMarchingMeshComponent::ComputeNewDistanceFieldData_Completed ( TUniquePtr < FDistanceFieldVolumeData > NewData , TQueue < TFunction < void  ( ) > , EQueueMode::Mpsc >& GameThreadJob )
+void ULPPMarchingMeshComponent::ComputeNewDistanceFieldData_Completed ( TUniquePtr < FDistanceFieldVolumeData >& NewData , TQueue < TFunction < void  ( ) > , EQueueMode::Mpsc >& GameThreadJob )
 {
 	if ( IsValid ( this ) == false )
 	{

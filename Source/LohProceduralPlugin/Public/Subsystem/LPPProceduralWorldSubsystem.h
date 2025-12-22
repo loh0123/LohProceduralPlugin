@@ -40,11 +40,16 @@ public:
 
 public:
 
-	TWeakPtr < FProceduralWorldComputeJob > LaunchJob ( const TCHAR* DebugName , const TFunction < void  ( FProgressCancel& Progress , TQueue < TFunction < void  ( ) > , EQueueMode::Mpsc >& GameThreadJob ) >& JobWork , const bool bSingleThreadMode );
+	TWeakPtr < FProceduralWorldComputeJob > LaunchJob (
+		const TCHAR*                                                                                                                    DebugName ,
+		const TFunction < void  ( FProgressCancel& Progress , TQueue < TFunction < void  ( ) > , EQueueMode::Mpsc >& GameThreadJob ) >& JobWork ,
+		const LowLevelTasks::ETaskPriority                                                                                              Priority          = LowLevelTasks::ETaskPriority::BackgroundHigh ,
+		const bool                                                                                                                      bSingleThreadMode = false
+		);
 
 protected:
 
-	FORCEINLINE UE::Tasks::FTask LaunchJobInternal ( FProceduralWorldComputeJob* JobPtr );
+	FORCEINLINE UE::Tasks::FTask LaunchJobInternal ( FProceduralWorldComputeJob* JobPtr , const LowLevelTasks::ETaskPriority Priority = LowLevelTasks::ETaskPriority::BackgroundHigh );
 
 public:
 
@@ -101,7 +106,7 @@ struct TAsyncMarchingData
 		LastPendingJobs = nullptr;
 	}
 
-	FORCEINLINE void LaunchJob ( const TCHAR* DebugName , const TFunction < void  ( FProgressCancel& Progress , TQueue < TFunction < void  ( ) > , EQueueMode::Mpsc >& GameThreadJob ) >& JobWork , const bool bSingleThreadMode = false )
+	FORCEINLINE void LaunchJob ( const TCHAR* DebugName , const TFunction < void  ( FProgressCancel& Progress , TQueue < TFunction < void  ( ) > , EQueueMode::Mpsc >& GameThreadJob ) >& JobWork , const LowLevelTasks::ETaskPriority Priority = LowLevelTasks::ETaskPriority::BackgroundHigh , const bool bSingleThreadMode = false )
 	{
 		check ( Outer.IsExplicitlyNull() == false );
 
@@ -114,7 +119,7 @@ struct TAsyncMarchingData
 
 		if ( Subsystem->bIsShuttingDown == false )
 		{
-			LastPendingJobs = Subsystem->LaunchJob ( DebugName , JobWork , bSingleThreadMode );
+			LastPendingJobs = Subsystem->LaunchJob ( DebugName , JobWork , Priority , bSingleThreadMode );
 		}
 		else
 		{

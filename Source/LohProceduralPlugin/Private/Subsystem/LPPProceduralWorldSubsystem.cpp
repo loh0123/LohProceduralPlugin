@@ -47,7 +47,7 @@ TStatId ULPPProceduralWorldSubsystem::GetStatId ( ) const
 	RETURN_QUICK_DECLARE_CYCLE_STAT ( ULPPChunkManagerSubsystem , STATGROUP_Tickables );
 }
 
-TWeakPtr < FProceduralWorldComputeJob > ULPPProceduralWorldSubsystem::LaunchJob ( const TCHAR* DebugName , const TFunction < void  ( FProgressCancel& Progress , TQueue < TFunction < void  ( ) > , EQueueMode::Mpsc >& GameThreadJob ) >& JobWork , const bool bSingleThreadMode )
+TWeakPtr < FProceduralWorldComputeJob > ULPPProceduralWorldSubsystem::LaunchJob ( const TCHAR* DebugName , const TFunction < void  ( FProgressCancel& Progress , TQueue < TFunction < void  ( ) > , EQueueMode::Mpsc >& GameThreadJob ) >& JobWork , const LowLevelTasks::ETaskPriority Priority , const bool bSingleThreadMode )
 {
 	check ( IsInGameThread ( ) ); // Must In Game Thread
 
@@ -83,7 +83,7 @@ TWeakPtr < FProceduralWorldComputeJob > ULPPProceduralWorldSubsystem::LaunchJob 
 	}
 	else
 	{
-		NewJob->Task = LaunchJobInternal ( NewJob.Get ( ) );
+		NewJob->Task = LaunchJobInternal ( NewJob.Get ( ) , Priority );
 	}
 
 	// add a new job
@@ -94,7 +94,7 @@ TWeakPtr < FProceduralWorldComputeJob > ULPPProceduralWorldSubsystem::LaunchJob 
 	return ResultData;
 }
 
-UE::Tasks::FTask ULPPProceduralWorldSubsystem::LaunchJobInternal ( FProceduralWorldComputeJob* JobPtr )
+UE::Tasks::FTask ULPPProceduralWorldSubsystem::LaunchJobInternal ( FProceduralWorldComputeJob* JobPtr , const LowLevelTasks::ETaskPriority Priority )
 {
 	return UE::Tasks::Launch ( *JobPtr->DebugName ,
 	                           [this, JobPtr] ( )
@@ -102,5 +102,5 @@ UE::Tasks::FTask ULPPProceduralWorldSubsystem::LaunchJobInternal ( FProceduralWo
 		                           JobPtr->JobWork ( *JobPtr->Progress , LazyGameThreadJobQueue );
 		                           JobPtr->bHasCompleted = true;
 	                           } ,
-	                           LowLevelTasks::ETaskPriority::BackgroundHigh );
+	                           Priority );
 }

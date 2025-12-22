@@ -120,10 +120,7 @@ void FLPPChunkedDynamicMeshProxy::InitializeFromMesh ( const FDynamicMesh3* Mesh
 		const FDynamicMeshNormalOverlay* NormalOverlay = MeshData->HasAttributes ( ) ? MeshData->Attributes ( )->PrimaryNormals ( ) : nullptr;
 		const FDynamicMeshColorOverlay*  ColorOverlay  = MeshData->HasAttributes ( ) ? MeshData->Attributes ( )->PrimaryColors ( ) : nullptr;
 
-		const bool bHasColor    = ColorOverlay != nullptr;
-		const bool bHasTangents = MeshData->HasAttributes ( ) && MeshData->Attributes ( )->HasTangentSpace ( );
-
-		UE::Geometry::FDynamicMeshTangents Tangents ( MeshData );
+		const bool bHasColor = ColorOverlay != nullptr;
 
 		{
 			MeshPosition.AddUninitialized ( NumVertices );
@@ -248,9 +245,10 @@ void FLPPChunkedDynamicMeshProxy::InitializeFromMesh ( const FDynamicMesh3* Mesh
 
 // Distance Field And Lumen
 
-void FLPPChunkedDynamicMeshProxy::SetDistanceFieldData ( const TSharedPtr < FDistanceFieldVolumeData >& InDistanceFieldData )
+void FLPPChunkedDynamicMeshProxy::SetDistanceFieldData ( const TSharedPtr < FDistanceFieldVolumeData >& InDistanceFieldData , const float Bias )
 {
 	DistanceFieldData                    = InDistanceFieldData;
+	DFBias                               = Bias;
 	bSupportsDistanceFieldRepresentation = true;
 
 	bAffectDistanceFieldLighting = ParentComponent->bAffectDistanceFieldLighting;
@@ -422,8 +420,14 @@ void FLPPChunkedDynamicMeshProxy::GetDynamicMeshElements ( const TArray < const 
 }
 
 void FLPPChunkedDynamicMeshProxy::GetCollisionDynamicMeshElements ( TArray < FMeshRenderBufferSet* >&   Buffers ,
-                                                                    const FEngineShowFlags&             EngineShowFlags , bool bDrawCollisionView , bool              bDrawSimpleCollision , bool bDrawComplexCollision , bool bProxyIsSelected ,
-                                                                    const TArray < const FSceneView* >& Views , uint32         VisibilityMap , FMeshElementCollector& Collector ) const
+                                                                    const FEngineShowFlags&             EngineShowFlags ,
+                                                                    bool                                bDrawCollisionView ,
+                                                                    bool                                bDrawSimpleCollision ,
+                                                                    bool                                bDrawComplexCollision ,
+                                                                    bool                                bProxyIsSelected ,
+                                                                    const TArray < const FSceneView* >& Views ,
+                                                                    uint32                              VisibilityMap ,
+                                                                    FMeshElementCollector&              Collector ) const
 {
 #if UE_ENABLE_DEBUG_DRAWING
 	FScopeLock Lock ( &CachedCollisionLock );
