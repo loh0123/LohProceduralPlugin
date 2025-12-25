@@ -7,8 +7,6 @@
 
 #include "CoreMinimal.h"
 #include "MeshCardBuild.h"
-#include "RHICommandList.h"
-#include "RayTracingGeometry.h"
 #include "DistanceFieldAtlas.h"
 #include "Templates/PimplPtr.h"
 #include "PrimitiveViewRelevance.h"
@@ -128,7 +126,8 @@ public:
 		TArray < FColor >&    ColorList ,
 		TArray < FVector3f >& NormalList ,
 		TArray < FVector3f >& TangentList ,
-		TArray < FVector3f >& BiTangentList
+		TArray < FVector3f >& BiTangentList ,
+		TArray < uint8 >&     MaterialList
 		) >& InitFunc );
 
 	void InitializeFromMesh ( const FDynamicMesh3* MeshData );
