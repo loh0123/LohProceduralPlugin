@@ -12,6 +12,8 @@
 #include "PrimitiveViewRelevance.h"
 #include "Components/BaseDynamicMeshSceneProxy.h"
 
+class ULPPDynamicMesh;
+class FLPPDynamicMeshRenderData;
 /**
  * 
  */
@@ -22,32 +24,20 @@ class FLPPChunkedDynamicMeshProxy final : public FPrimitiveSceneProxy
 
 public:
 
-	FLPPChunkedDynamicMeshProxy ( UMeshComponent* Component , const float NewDFBias ) : FPrimitiveSceneProxy ( Component )
-	                                                                                    , bEnableRaytracing ( true )
-	                                                                                    , bPreferStaticDrawPath ( true )
-	                                                                                    , DistanceFieldData ( nullptr )
-	                                                                                    , MaterialRelevance ( Component->GetMaterialRelevance ( GetScene ( ).GetShaderPlatform ( ) ) )
-	                                                                                    , ParentComponent ( Component )
-	                                                                                    , DFBias ( NewDFBias )
-	                                                                                    , CollisionTraceFlag ( )
-	{
-		SetCollisionData ( );
-
-		bOpaqueOrMasked = MaterialRelevance.bOpaque;
-
-		bVerifyUsedMaterials = true;
-
-		bHasDeformableMesh                                  = false;
-		bStaticElementsAlwaysUseProxyPrimitiveUniformBuffer = true;
-		bSupportsSortedTriangles                            = true;
-	}
+	FLPPChunkedDynamicMeshProxy ( ULPPDynamicMesh* Component , const float NewDFBias );
 
 	virtual ~FLPPChunkedDynamicMeshProxy ( ) override
 	{
+		AllocatedSetsLock.Lock ( );
 		for ( FMeshRenderBufferSet* BufferSet : AllocatedBufferSets )
 		{
 			FMeshRenderBufferSet::DestroyRenderBufferSet ( BufferSet );
 		}
+		AllocatedSetsLock.Unlock ( );
+
+		MeshRenderData.Reset ( );
+
+		ParentComponent = nullptr;
 	}
 
 protected:
@@ -65,16 +55,6 @@ protected:
 	// whether to try to use the static draw instead of dynamic draw path; note we may still use the dynamic path if collision or vertex color rendering is enabled
 	bool bPreferStaticDrawPath = true;
 
-protected:
-
-	TPimplPtr < FCardRepresentationData > MeshCards;
-
-	bool bMeshCardsValid = false;
-
-protected:
-
-	TSharedPtr < FDistanceFieldVolumeData > DistanceFieldData;
-
 private:
 
 	FMaterialRelevance MaterialRelevance;
@@ -82,7 +62,7 @@ private:
 public:
 
 	/** Component that created this proxy (is there a way to look this up?) */
-	UMeshComponent* ParentComponent;
+	ULPPDynamicMesh* ParentComponent;
 
 	float DFBias = 0.0f;
 
@@ -119,24 +99,18 @@ public: // Render Buffer
 
 public:
 
-	LOHPROCEDURALPLUGIN_API void Initialize ( const TFunctionRef < bool  (
-		TArray < FVector3f >& PositionList ,
-		TArray < uint32 >&    IndexList ,
-		TArray < FVector2f >& UV0List ,
-		TArray < FColor >&    ColorList ,
-		TArray < FVector3f >& NormalList ,
-		TArray < FVector3f >& TangentList ,
-		TArray < FVector3f >& BiTangentList ,
-		TArray < uint8 >&     MaterialList
-		) >& InitFunc );
+	LOHPROCEDURALPLUGIN_API void Initialize (
+		const TArray < FVector3f >& PositionList ,
+		const TArray < uint32 >&    IndexList ,
+		const TArray < FVector2f >& UV0List ,
+		const TArray < FColor >&    ColorList ,
+		const TArray < FVector3f >& NormalList ,
+		const TArray < FVector3f >& TangentList ,
+		const TArray < FVector3f >& BiTangentList ,
+		const TArray < uint8 >&     MaterialList
+		);
 
-	void InitializeFromMesh ( const FDynamicMesh3* MeshData );
-
-public:
-
-	LOHPROCEDURALPLUGIN_API void SetDistanceFieldData ( const TSharedPtr < FDistanceFieldVolumeData >& InDistanceFieldData , const float Bias );
-
-	LOHPROCEDURALPLUGIN_API void SetLumenData ( const TArray < class FLumenCardBuildData >& InLumenCardData , const FBox& InLumenBound );
+	void InitializeFromData ( );
 
 public:
 
@@ -227,4 +201,12 @@ public:
 	uint32 GetAllocatedSize ( void ) const;
 
 	virtual SIZE_T GetTypeHash ( ) const override;
+
+private:
+
+	TSharedPtr < FLPPDynamicMeshRenderData > MeshRenderData;
+
+	TSharedPtr < FCardRepresentationData > LumenCardData = nullptr;
+
+	TSharedPtr < FDistanceFieldVolumeData > DistanceFieldPtr = nullptr;
 };

@@ -48,7 +48,8 @@ public class LohProceduralPluginMarching : ModuleRules
 				"LohFunctionPlugin",
 				"LohProceduralPlugin",
 				"MeshConversionEngineTypes",
-				"DynamicMesh"
+				"DynamicMesh",
+				"NaniteBuilder"
 				// ... add private dependencies that you statically link with here ...
 			}
 		);

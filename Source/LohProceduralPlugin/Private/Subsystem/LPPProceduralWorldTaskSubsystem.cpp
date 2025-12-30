@@ -1,9 +1,9 @@
 ﻿// Fill out your copyright notice in the Description page of Project Settings.
 
 
-#include "Subsystem/LPPProceduralWorldSubsystem.h"
+#include "Subsystem/LPPProceduralWorldTaskSubsystem.h"
 
-void ULPPProceduralWorldSubsystem::Initialize ( FSubsystemCollectionBase& Collection )
+void ULPPProceduralWorldTaskSubsystem::Initialize ( FSubsystemCollectionBase& Collection )
 {
 	Super::Initialize ( Collection );
 
@@ -11,7 +11,7 @@ void ULPPProceduralWorldSubsystem::Initialize ( FSubsystemCollectionBase& Collec
 	TickInterval = 1.0f / 60.0f;
 }
 
-void ULPPProceduralWorldSubsystem::Tick ( float DeltaTime )
+void ULPPProceduralWorldTaskSubsystem::Tick ( float DeltaTime )
 {
 	Super::Tick ( DeltaTime );
 
@@ -27,7 +27,7 @@ void ULPPProceduralWorldSubsystem::Tick ( float DeltaTime )
 	}
 }
 
-void ULPPProceduralWorldSubsystem::Deinitialize ( )
+void ULPPProceduralWorldTaskSubsystem::Deinitialize ( )
 {
 	Super::Deinitialize ( );
 
@@ -42,12 +42,12 @@ void ULPPProceduralWorldSubsystem::Deinitialize ( )
 	LazyGameThreadJobQueue.Empty ( );
 }
 
-TStatId ULPPProceduralWorldSubsystem::GetStatId ( ) const
+TStatId ULPPProceduralWorldTaskSubsystem::GetStatId ( ) const
 {
 	RETURN_QUICK_DECLARE_CYCLE_STAT ( ULPPChunkManagerSubsystem , STATGROUP_Tickables );
 }
 
-TWeakPtr < FProceduralWorldComputeJob > ULPPProceduralWorldSubsystem::LaunchJob ( const TCHAR* DebugName , const TFunction < void  ( FProgressCancel& Progress , TQueue < TFunction < void  ( ) > , EQueueMode::Mpsc >& GameThreadJob ) >& JobWork , const LowLevelTasks::ETaskPriority Priority , const bool bSingleThreadMode )
+TWeakPtr < FProceduralWorldComputeJob > ULPPProceduralWorldTaskSubsystem::LaunchJob ( const TCHAR* DebugName , const TFunction < void  ( FProgressCancel& Progress , TQueue < TFunction < void  ( ) > , EQueueMode::Mpsc >& GameThreadJob ) >& JobWork , const LowLevelTasks::ETaskPriority Priority , const bool bSingleThreadMode )
 {
 	check ( IsInGameThread ( ) ); // Must In Game Thread
 
@@ -94,7 +94,7 @@ TWeakPtr < FProceduralWorldComputeJob > ULPPProceduralWorldSubsystem::LaunchJob 
 	return ResultData;
 }
 
-UE::Tasks::FTask ULPPProceduralWorldSubsystem::LaunchJobInternal ( FProceduralWorldComputeJob* JobPtr , const LowLevelTasks::ETaskPriority Priority )
+UE::Tasks::FTask ULPPProceduralWorldTaskSubsystem::LaunchJobInternal ( FProceduralWorldComputeJob* JobPtr , const LowLevelTasks::ETaskPriority Priority )
 {
 	return UE::Tasks::Launch ( *JobPtr->DebugName ,
 	                           [this, JobPtr] ( )

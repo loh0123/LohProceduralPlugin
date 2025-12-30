@@ -5,7 +5,7 @@
 #include "CoreMinimal.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "Util/ProgressCancel.h"
-#include "LPPProceduralWorldSubsystem.generated.h"
+#include "LPPProceduralWorldTaskSubsystem.generated.h"
 
 struct FProceduralWorldComputeJob
 {
@@ -22,7 +22,7 @@ struct FProceduralWorldComputeJob
  * 
  */
 UCLASS ( )
-class LOHPROCEDURALPLUGIN_API ULPPProceduralWorldSubsystem : public UTickableWorldSubsystem
+class LOHPROCEDURALPLUGIN_API ULPPProceduralWorldTaskSubsystem : public UTickableWorldSubsystem
 {
 	GENERATED_BODY ( )
 
@@ -70,13 +70,13 @@ protected:
 	float LastTickTime = 0.0f;
 };
 
-struct TAsyncMarchingData
+struct TAsyncProceduralWorldTask
 {
-	explicit TAsyncMarchingData ( UObject* InOuter ) : Outer ( InOuter )
+	explicit TAsyncProceduralWorldTask ( UObject* InOuter ) : Outer ( InOuter )
 	{
 	}
 
-	~TAsyncMarchingData ( )
+	~TAsyncProceduralWorldTask ( )
 	{
 		if ( LastPendingJobs.IsValid ( ) )
 		{
@@ -96,7 +96,7 @@ struct TAsyncMarchingData
 	{
 		check ( Outer.IsExplicitlyNull() == false );
 
-		ULPPProceduralWorldSubsystem* Subsystem = Outer->GetWorld ( )->GetSubsystem < ULPPProceduralWorldSubsystem > ( );
+		ULPPProceduralWorldTaskSubsystem* Subsystem = Outer->GetWorld ( )->GetSubsystem < ULPPProceduralWorldTaskSubsystem > ( );
 
 		if ( LastPendingJobs.IsValid ( ) )
 		{
@@ -110,7 +110,7 @@ struct TAsyncMarchingData
 	{
 		check ( Outer.IsExplicitlyNull() == false );
 
-		ULPPProceduralWorldSubsystem* Subsystem = Outer->GetWorld ( )->GetSubsystem < ULPPProceduralWorldSubsystem > ( );
+		ULPPProceduralWorldTaskSubsystem* Subsystem = Outer->GetWorld ( )->GetSubsystem < ULPPProceduralWorldTaskSubsystem > ( );
 
 		if ( LastPendingJobs.IsValid ( ) )
 		{

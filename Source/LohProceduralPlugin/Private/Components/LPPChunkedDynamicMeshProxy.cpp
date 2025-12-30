@@ -9,7 +9,30 @@
 #include "MeshPaintVisualize.h"
 #include "PrimitiveUniformShaderParametersBuilder.h"
 #include "RayTracingInstance.h"
+#include "Components/LPPDynamicMesh.h"
 #include "Materials/MaterialRenderProxy.h"
+
+FLPPChunkedDynamicMeshProxy::FLPPChunkedDynamicMeshProxy ( ULPPDynamicMesh* Component , const float NewDFBias ) : FPrimitiveSceneProxy ( Component )
+                                                                                                                  , bEnableRaytracing ( true )
+                                                                                                                  , bPreferStaticDrawPath ( true )
+                                                                                                                  , MaterialRelevance ( Component->GetMaterialRelevance ( GetScene ( ).GetShaderPlatform ( ) ) )
+                                                                                                                  , ParentComponent ( Component )
+                                                                                                                  , DFBias ( NewDFBias )
+                                                                                                                  , CollisionTraceFlag ( )
+                                                                                                                  , MeshRenderData ( Component->GetRenderData ( ) )
+{
+	SetCollisionData ( );
+
+	bOpaqueOrMasked = MaterialRelevance.bOpaque;
+
+	bVerifyUsedMaterials = true;
+
+	bHasDeformableMesh                                  = false;
+	bStaticElementsAlwaysUseProxyPrimitiveUniformBuffer = true;
+	bSupportsSortedTriangles                            = true;
+
+	InitializeFromData ( );
+}
 
 FMeshRenderBufferSet* FLPPChunkedDynamicMeshProxy::AllocateNewRenderBufferSet ( )
 {
@@ -38,107 +61,147 @@ void FLPPChunkedDynamicMeshProxy::ReleaseRenderBufferSet ( FMeshRenderBufferSet*
 	}
 }
 
-void FLPPChunkedDynamicMeshProxy::Initialize ( const TFunctionRef < bool  ( TArray < FVector3f >& PositionList , TArray < uint32 >& IndexList , TArray < FVector2f >& UV0List , TArray < FColor >& ColorList , TArray < FVector3f >& NormalList , TArray < FVector3f >& TangentList , TArray < FVector3f >& BiTangentList , TArray < uint8 >& MaterialList ) >& InitFunc )
+void FLPPChunkedDynamicMeshProxy::Initialize (
+	const TArray < FVector3f >& PositionList ,
+	const TArray < uint32 >&    IndexList ,
+	const TArray < FVector2f >& UV0List ,
+	const TArray < FColor >&    ColorList ,
+	const TArray < FVector3f >& NormalList ,
+	const TArray < FVector3f >& TangentList ,
+	const TArray < FVector3f >& BiTangentList ,
+	const TArray < uint8 >&     MaterialList
+	)
 {
 	// allocate buffer sets based on materials
 	ensure ( AllocatedBufferSets.IsEmpty ( ) );
 
-	TArray < FVector3f > PositionList;
-	TArray < uint32 >    IndexList;
-	TArray < FVector2f > UV0List;
-	TArray < FColor >    ColorList;
-	TArray < FVector3f > NormalList;
-	TArray < FVector3f > TangentList;
-	TArray < FVector3f > BiTangentList;
-	TArray < uint8 >     MaterialList;
-
-	if ( InitFunc ( PositionList , IndexList , UV0List , ColorList , NormalList , TangentList , BiTangentList , MaterialList ) == false )
+	if ( PositionList.IsEmpty ( ) )
 	{
 		return;
 	}
 
-	uint8 TotalMaterialCount = 1;
-
-	for ( const uint8 MaterialID : MaterialList )
-	{
-		if ( TotalMaterialCount < MaterialID )
-		{
-			TotalMaterialCount = MaterialID;
-		}
-	}
-
 	TArray < FMeshRenderBufferSet* > RenderBufferSetList;
 
-	TArray < FVector3f > SectionPositionList;
-	TArray < uint32 >    SectionIndexList;
-	TArray < FVector2f > SectionUV0List;
-	TArray < FColor >    SectionColorList;
-	TArray < FVector3f > SectionNormalList;
-	TArray < FVector3f > SectionTangentList;
-	TArray < FVector3f > SectionBiTangentList;
-
-	RenderBufferSetList.Reserve ( TotalMaterialCount + 1 );
-
-	for ( uint8 SectionIndex = 0 ; SectionIndex <= TotalMaterialCount ; ++SectionIndex )
+	if ( MaterialList.IsEmpty ( ) )
 	{
 		FMeshRenderBufferSet* RenderBufferSet = RenderBufferSetList.Add_GetRef ( AllocateNewRenderBufferSet ( ) );
-		RenderBufferSet->Material             = ParentComponent->GetMaterial ( SectionIndex );
+		RenderBufferSet->Material             = ParentComponent->GetMaterial ( 0 );
 
 		if ( RenderBufferSet->Material == nullptr )
 		{
 			RenderBufferSet->Material = UMaterial::GetDefaultMaterial ( MD_Surface );
 		}
 
-		SectionPositionList.Reset ( PositionList.Num ( ) );
-		SectionIndexList.Reset ( IndexList.Num ( ) );
-		SectionUV0List.Reset ( UV0List.Num ( ) );
-		SectionColorList.Reset ( ColorList.Num ( ) );
-		SectionNormalList.Reset ( NormalList.Num ( ) );
-		SectionTangentList.Reset ( TangentList.Num ( ) );
-		SectionBiTangentList.Reset ( BiTangentList.Num ( ) );
+		RenderBufferSet->TriangleCount = IndexList.Num ( ) / 3;
+		RenderBufferSet->PositionVertexBuffer.Init ( PositionList , false );
+		RenderBufferSet->IndexBuffer.Indices = IndexList;
 
-		for ( int32 Index = 0 ; Index < PositionList.Num ( ) ; ++Index )
+		RenderBufferSet->StaticMeshVertexBuffer.Init ( PositionList.Num ( ) , 1 , false );
+
+		if ( ColorList.IsEmpty ( ) == false )
 		{
-			const int32 MaterialListIndex = Index / 3;
+			RenderBufferSet->ColorVertexBuffer.InitFromColorArray ( ColorList.GetData ( ) , ColorList.Num ( ) , sizeof ( FColor ) , false );
+		}
 
-			if ( MaterialList [ MaterialListIndex ] != SectionIndex )
+		for ( int32 VertexIndex = 0 ; VertexIndex < PositionList.Num ( ) ; ++VertexIndex )
+		{
+			RenderBufferSet->StaticMeshVertexBuffer.SetVertexUV ( VertexIndex , 0 , UV0List [ VertexIndex ] );
+			RenderBufferSet->StaticMeshVertexBuffer.SetVertexTangents (
+			                                                           VertexIndex ,
+			                                                           TangentList [ VertexIndex ] ,
+			                                                           BiTangentList [ VertexIndex ] ,
+			                                                           NormalList [ VertexIndex ]
+			                                                          );
+		}
+	}
+	else
+	{
+		uint8 TotalMaterialCount = 1;
+
+		for ( const uint8 MaterialID : MaterialList )
+		{
+			if ( TotalMaterialCount < MaterialID )
+			{
+				TotalMaterialCount = MaterialID;
+			}
+		}
+
+		TArray < FVector3f > SectionPositionList;
+		TArray < uint32 >    SectionIndexList;
+		TArray < FVector2f > SectionUV0List;
+		TArray < FColor >    SectionColorList;
+		TArray < FVector3f > SectionNormalList;
+		TArray < FVector3f > SectionTangentList;
+		TArray < FVector3f > SectionBiTangentList;
+
+		RenderBufferSetList.Reserve ( TotalMaterialCount + 1 );
+
+		for ( uint8 SectionIndex = 0 ; SectionIndex <= TotalMaterialCount ; ++SectionIndex )
+		{
+			SectionPositionList.Reset ( PositionList.Num ( ) );
+			SectionIndexList.Reset ( IndexList.Num ( ) );
+			SectionUV0List.Reset ( UV0List.Num ( ) );
+			SectionColorList.Reset ( ColorList.Num ( ) );
+			SectionNormalList.Reset ( NormalList.Num ( ) );
+			SectionTangentList.Reset ( TangentList.Num ( ) );
+			SectionBiTangentList.Reset ( BiTangentList.Num ( ) );
+
+			for ( int32 Index = 0 ; Index < PositionList.Num ( ) ; ++Index )
+			{
+				const int32 MaterialListIndex = Index / 3;
+
+				if ( MaterialList [ MaterialListIndex ] != SectionIndex )
+				{
+					continue;
+				}
+
+				SectionPositionList.Add ( PositionList [ Index ] );
+				SectionIndexList.Add ( IndexList [ Index ] );
+				SectionUV0List.Add ( UV0List [ Index ] );
+				SectionNormalList.Add ( NormalList [ Index ] );
+				SectionTangentList.Add ( TangentList [ Index ] );
+				SectionBiTangentList.Add ( BiTangentList [ Index ] );
+
+				if ( ColorList.IsEmpty ( ) == false )
+				{
+					SectionColorList.Add ( ColorList [ Index ] );
+				}
+			}
+
+			if ( PositionList.IsEmpty ( ) )
 			{
 				continue;
 			}
 
-			SectionPositionList.Add ( PositionList [ Index ] );
-			SectionIndexList.Add ( IndexList [ Index ] );
-			SectionUV0List.Add ( UV0List [ Index ] );
-			SectionNormalList.Add ( NormalList [ Index ] );
-			SectionTangentList.Add ( TangentList [ Index ] );
-			SectionBiTangentList.Add ( BiTangentList [ Index ] );
+			FMeshRenderBufferSet* RenderBufferSet = RenderBufferSetList.Add_GetRef ( AllocateNewRenderBufferSet ( ) );
+			RenderBufferSet->Material             = ParentComponent->GetMaterial ( SectionIndex );
+
+			if ( RenderBufferSet->Material == nullptr )
+			{
+				RenderBufferSet->Material = UMaterial::GetDefaultMaterial ( MD_Surface );
+			}
+
+			RenderBufferSet->TriangleCount = SectionIndexList.Num ( ) / 3;
+			RenderBufferSet->PositionVertexBuffer.Init ( SectionPositionList , false );
+			RenderBufferSet->IndexBuffer.Indices = SectionIndexList;
+
+			RenderBufferSet->StaticMeshVertexBuffer.Init ( SectionPositionList.Num ( ) , 1 , false );
 
 			if ( ColorList.IsEmpty ( ) == false )
 			{
-				SectionColorList.Add ( ColorList [ Index ] );
+				RenderBufferSet->ColorVertexBuffer.InitFromColorArray ( SectionColorList.GetData ( ) , SectionColorList.Num ( ) , sizeof ( FColor ) , false );
 			}
-		}
 
-		RenderBufferSet->TriangleCount = SectionIndexList.Num ( ) / 3;
-		RenderBufferSet->PositionVertexBuffer.Init ( SectionPositionList , false );
-		RenderBufferSet->IndexBuffer.Indices = SectionIndexList;
-
-		RenderBufferSet->StaticMeshVertexBuffer.Init ( SectionPositionList.Num ( ) , 1 , false );
-
-		if ( ColorList.IsEmpty ( ) == false )
-		{
-			RenderBufferSet->ColorVertexBuffer.InitFromColorArray ( SectionColorList.GetData ( ) , SectionColorList.Num ( ) , sizeof ( FColor ) , false );
-		}
-
-		for ( int32 VertexIndex = 0 ; VertexIndex < SectionPositionList.Num ( ) ; ++VertexIndex )
-		{
-			RenderBufferSet->StaticMeshVertexBuffer.SetVertexUV ( VertexIndex , 0 , SectionUV0List [ VertexIndex ] );
-			RenderBufferSet->StaticMeshVertexBuffer.SetVertexTangents (
-			                                                           VertexIndex ,
-			                                                           SectionTangentList [ VertexIndex ] ,
-			                                                           SectionBiTangentList [ VertexIndex ] ,
-			                                                           SectionNormalList [ VertexIndex ]
-			                                                          );
+			for ( int32 VertexIndex = 0 ; VertexIndex < SectionPositionList.Num ( ) ; ++VertexIndex )
+			{
+				RenderBufferSet->StaticMeshVertexBuffer.SetVertexUV ( VertexIndex , 0 , SectionUV0List [ VertexIndex ] );
+				RenderBufferSet->StaticMeshVertexBuffer.SetVertexTangents (
+				                                                           VertexIndex ,
+				                                                           SectionTangentList [ VertexIndex ] ,
+				                                                           SectionBiTangentList [ VertexIndex ] ,
+				                                                           SectionNormalList [ VertexIndex ]
+				                                                          );
+			}
 		}
 	}
 
@@ -152,14 +215,14 @@ void FLPPChunkedDynamicMeshProxy::Initialize ( const TFunctionRef < bool  ( TArr
 	                                                                           } );
 }
 
-void FLPPChunkedDynamicMeshProxy::InitializeFromMesh ( const FDynamicMesh3* MeshData )
+void FLPPChunkedDynamicMeshProxy::InitializeFromData ( )
 {
-	if ( MeshData == nullptr )
+	if ( MeshRenderData.IsValid ( ) == false )
 	{
 		return;
 	}
 
-	if ( MeshData->TriangleCount ( ) != 0 )
+	if ( MeshRenderData->MeshData.TriangleCount ( ) != 0 )
 	{
 		/** Vertex position */
 		TArray < FVector3f > MeshPosition = TArray < FVector3f > ( );
@@ -176,14 +239,14 @@ void FLPPChunkedDynamicMeshProxy::InitializeFromMesh ( const FDynamicMesh3* Mesh
 		// Section ID
 		TArray < uint8 > MeshMaterial = TArray < uint8 > ( );
 
-		const int NumTriangles  = MeshData->TriangleCount ( );
+		const int NumTriangles  = MeshRenderData->MeshData.TriangleCount ( );
 		const int NumVertices   = NumTriangles * 3;
-		const int NumUVOverlays = MeshData->HasAttributes ( ) ? MeshData->Attributes ( )->NumUVLayers ( ) : 0; // One UV Support Only
+		const int NumUVOverlays = MeshRenderData->MeshData.HasAttributes ( ) ? MeshRenderData->MeshData.Attributes ( )->NumUVLayers ( ) : 0; // One UV Support Only
 
-		const FDynamicMeshNormalOverlay* NormalOverlay = MeshData->HasAttributes ( ) ? MeshData->Attributes ( )->PrimaryNormals ( ) : nullptr;
-		const FDynamicMeshColorOverlay*  ColorOverlay  = MeshData->HasAttributes ( ) ? MeshData->Attributes ( )->PrimaryColors ( ) : nullptr;
+		const FDynamicMeshNormalOverlay* NormalOverlay = MeshRenderData->MeshData.HasAttributes ( ) ? MeshRenderData->MeshData.Attributes ( )->PrimaryNormals ( ) : nullptr;
+		const FDynamicMeshColorOverlay*  ColorOverlay  = MeshRenderData->MeshData.HasAttributes ( ) ? MeshRenderData->MeshData.Attributes ( )->PrimaryColors ( ) : nullptr;
 
-		const FDynamicMeshMaterialAttribute* MaterialID = MeshData->HasAttributes ( ) ? MeshData->Attributes ( )->GetMaterialID ( ) : nullptr;
+		const FDynamicMeshMaterialAttribute* MaterialID = MeshRenderData->MeshData.HasAttributes ( ) ? MeshRenderData->MeshData.Attributes ( )->GetMaterialID ( ) : nullptr;
 
 		const bool bHasColor = ColorOverlay != nullptr;
 
@@ -191,7 +254,11 @@ void FLPPChunkedDynamicMeshProxy::InitializeFromMesh ( const FDynamicMesh3* Mesh
 			MeshPosition.AddUninitialized ( NumVertices );
 			MeshNormal.AddUninitialized ( NumVertices );
 			MeshUV0.AddUninitialized ( NumVertices );
-			MeshMaterial.AddUninitialized ( NumTriangles );
+
+			if ( MaterialID != nullptr )
+			{
+				MeshMaterial.AddUninitialized ( NumTriangles );
+			}
 
 			if ( bHasColor )
 			{
@@ -203,9 +270,9 @@ void FLPPChunkedDynamicMeshProxy::InitializeFromMesh ( const FDynamicMesh3* Mesh
 		TArray < int32 > TriangleArray;
 		{
 			TriangleArray.Reserve ( NumTriangles );
-			for ( const int32 TriangleID : MeshData->TriangleIndicesItr ( ) )
+			for ( const int32 TriangleID : MeshRenderData->MeshData.TriangleIndicesItr ( ) )
 			{
-				if ( MeshData->IsTriangle ( TriangleID ) == false )
+				if ( MeshRenderData->MeshData.IsTriangle ( TriangleID ) == false )
 				{
 					continue;
 				}
@@ -218,11 +285,14 @@ void FLPPChunkedDynamicMeshProxy::InitializeFromMesh ( const FDynamicMesh3* Mesh
 		{
 			const int32 TriangleID = TriangleArray [ idx ];
 
-			UE::Geometry::FIndex3i TriIndexList       = MeshData->GetTriangle ( TriangleID );
+			UE::Geometry::FIndex3i TriIndexList       = MeshRenderData->MeshData.GetTriangle ( TriangleID );
 			UE::Geometry::FIndex3i TriNormalIndexList = ( NormalOverlay != nullptr ) ? NormalOverlay->GetTriangle ( TriangleID ) : UE::Geometry::FIndex3i::Invalid ( );
 			UE::Geometry::FIndex3i TriColorIndexList  = ( ColorOverlay != nullptr ) ? ColorOverlay->GetTriangle ( TriangleID ) : UE::Geometry::FIndex3i::Invalid ( );
 
-			MeshMaterial [ idx ] = MaterialID != nullptr ? MaterialID->GetValue ( TriangleID ) : 0;
+			if ( MaterialID != nullptr )
+			{
+				MeshMaterial [ idx ] = MaterialID->GetValue ( TriangleID );
+			}
 
 			const int32 VertOffset = idx * 3;
 			for ( int32 IndexOffset = 0 ; IndexOffset < 3 ; ++IndexOffset )
@@ -232,18 +302,18 @@ void FLPPChunkedDynamicMeshProxy::InitializeFromMesh ( const FDynamicMesh3* Mesh
 				const int32 NormalIndex   = TriNormalIndexList [ IndexOffset ];
 				const int32 ColorIndex    = TriColorIndexList [ IndexOffset ];
 
-				MeshPosition [ ListIndex ] = static_cast < FVector3f > ( MeshData->GetVertex ( TriangleIndex ) );
-				MeshNormal [ ListIndex ]   = NormalIndex != FDynamicMesh3::InvalidID ? NormalOverlay->GetElement ( NormalIndex ) : MeshData->GetVertexNormal ( TriangleIndex );
+				MeshPosition [ ListIndex ] = static_cast < FVector3f > ( MeshRenderData->MeshData.GetVertex ( TriangleIndex ) );
+				MeshNormal [ ListIndex ]   = NormalIndex != FDynamicMesh3::InvalidID ? NormalOverlay->GetElement ( NormalIndex ) : MeshRenderData->MeshData.GetVertexNormal ( TriangleIndex );
 
 				if ( bHasColor )
 				{
-					MeshColor [ ListIndex ] = static_cast < FLinearColor > ( ColorIndex != FDynamicMesh3::InvalidID ? ColorOverlay->GetElement ( ColorIndex ) : static_cast < FVector4f > ( MeshData->GetVertexColor ( TriangleIndex ) ) ).ToFColor ( true );
+					MeshColor [ ListIndex ] = static_cast < FLinearColor > ( ColorIndex != FDynamicMesh3::InvalidID ? ColorOverlay->GetElement ( ColorIndex ) : static_cast < FVector4f > ( MeshRenderData->MeshData.GetVertexColor ( TriangleIndex ) ) ).ToFColor ( true );
 				}
 			}
 
 			for ( int32 TexIndex = 0 ; TexIndex < 1 /*NumTexCoords */; ++TexIndex )
 			{
-				const FDynamicMeshUVOverlay* UVOverlay = MeshData->HasAttributes ( ) ? MeshData->Attributes ( )->GetUVLayer ( TexIndex ) : nullptr;
+				const FDynamicMeshUVOverlay* UVOverlay = MeshRenderData->MeshData.HasAttributes ( ) ? MeshRenderData->MeshData.Attributes ( )->GetUVLayer ( TexIndex ) : nullptr;
 
 				UE::Geometry::FIndex3i TriUVIndexList = ( UVOverlay != nullptr ) ? UVOverlay->GetTriangle ( TriangleID ) : UE::Geometry::FIndex3i::Invalid ( );
 
@@ -257,98 +327,71 @@ void FLPPChunkedDynamicMeshProxy::InitializeFromMesh ( const FDynamicMesh3* Mesh
 			}
 		} );
 
-		Initialize ( [&] (
-		            TArray < FVector3f >& PositionList ,
-		            TArray < uint32 >&    IndexList ,
-		            TArray < FVector2f >& UV0List ,
-		            TArray < FColor >&    ColorList ,
-		            TArray < FVector3f >& NormalList ,
-		            TArray < FVector3f >& TangentList ,
-		            TArray < FVector3f >& BiTangentList ,
-		            TArray < uint8 >&     MaterialList
-		            )
-		            {
-			            if ( MeshPosition.IsEmpty ( ) )
-			            {
-				            return false;
-			            }
+		TArray < FVector3f > TangentList;
+		TArray < FVector3f > BiTangentList;
+		TArray < uint32 >    IndexList;
+		{
+			TangentList.AddUninitialized ( MeshPosition.Num ( ) );
+			BiTangentList.AddUninitialized ( MeshPosition.Num ( ) );
 
-			            PositionList = MoveTemp ( MeshPosition );
-			            UV0List      = MoveTemp ( MeshUV0 );
-			            ColorList    = MoveTemp ( MeshColor );
-			            NormalList   = MoveTemp ( MeshNormal );
-			            MaterialList = MoveTemp ( MeshMaterial );
+			IndexList.Reserve ( MeshPosition.Num ( ) );
 
-			            TangentList.AddUninitialized ( PositionList.Num ( ) );
-			            BiTangentList.AddUninitialized ( PositionList.Num ( ) );
+			for ( int32 Index = 0 ; Index < MeshPosition.Num ( ) ; ++Index )
+			{
+				IndexList.Add ( Index );
 
-			            IndexList.Reserve ( PositionList.Num ( ) );
-			            MaterialList.Reserve ( PositionList.Num ( ) / 3 );
+				UE::Geometry::VectorUtil::MakePerpVectors ( MeshNormal [ Index ] , TangentList [ Index ] , BiTangentList [ Index ] );
+			}
+		}
 
-			            for ( int32 Index = 0 ; Index < PositionList.Num ( ) ; ++Index )
-			            {
-				            IndexList.Add ( Index );
-
-				            UE::Geometry::VectorUtil::MakePerpVectors ( NormalList [ Index ] , TangentList [ Index ] , BiTangentList [ Index ] );
-			            }
-
-			            return true;
-		            }
-		           );
+		Initialize ( MeshPosition , IndexList , MeshUV0 , MeshColor , MeshNormal , TangentList , BiTangentList , MeshMaterial );
 	}
-}
 
-// Distance Field And Lumen
-
-void FLPPChunkedDynamicMeshProxy::SetDistanceFieldData ( const TSharedPtr < FDistanceFieldVolumeData >& InDistanceFieldData , const float Bias )
-{
-	DistanceFieldData                    = InDistanceFieldData;
-	DFBias                               = Bias;
-	bSupportsDistanceFieldRepresentation = true;
-
-	bAffectDistanceFieldLighting = ParentComponent->bAffectDistanceFieldLighting;
-
-	UpdateVisibleInLumenScene ( );
-}
-
-void FLPPChunkedDynamicMeshProxy::SetLumenData ( const TArray < class FLumenCardBuildData >& InLumenCardData , const FBox& InLumenBound )
-{
-	if ( MeshCards.IsValid ( ) == false )
+	if ( MeshRenderData->DistanceFieldPtr.IsValid ( ) && IsValid ( ParentComponent ) )
 	{
-		MeshCards = MakePimpl < FCardRepresentationData > ( );
+		DistanceFieldPtr = MeshRenderData->DistanceFieldPtr;
+
+		DFBias                               = ParentComponent->GetDistanceFieldSelfShadowBias ( );
+		bSupportsDistanceFieldRepresentation = true;
+
+		bAffectDistanceFieldLighting = ParentComponent->bAffectDistanceFieldLighting;
 	}
 
-	FMeshCardsBuildData& MeshCardData = MeshCards.Get ( )->MeshCardsBuildData;
+	if ( MeshRenderData->LumenCardData.IsValid ( ) )
+	{
+		LumenCardData = MeshRenderData->LumenCardData;
 
-	MeshCardData.bMostlyTwoSided = false;
-	MeshCardData.Bounds          = InLumenBound;
-	MeshCardData.CardBuildData   = InLumenCardData;
-
-	UpdateVisibleInLumenScene ( );
+		UpdateVisibleInLumenScene ( );
+	}
 }
 
 void FLPPChunkedDynamicMeshProxy::GetDistanceFieldAtlasData ( const class FDistanceFieldVolumeData*& OutDistanceFieldData , float& SelfShadowBias ) const
 {
-	if ( DistanceFieldData.IsValid ( ) )
+	if ( DistanceFieldPtr.IsValid ( ) )
 	{
-		OutDistanceFieldData = DistanceFieldData.Get ( );
+		OutDistanceFieldData = DistanceFieldPtr.Get ( );
 		SelfShadowBias       = DFBias;
 	}
 }
 
 bool FLPPChunkedDynamicMeshProxy::HasDistanceFieldRepresentation ( ) const
 {
-	return CastsDynamicShadow ( ) && AffectsDistanceFieldLighting ( ) && DistanceFieldData.IsValid ( );
+	return CastsDynamicShadow ( ) && AffectsDistanceFieldLighting ( ) && DistanceFieldPtr.IsValid ( );
 }
 
 bool FLPPChunkedDynamicMeshProxy::HasDynamicIndirectShadowCasterRepresentation ( ) const
 {
-	return bCastsDynamicIndirectShadow && DistanceFieldData.IsValid ( );
+	return bCastsDynamicIndirectShadow && DistanceFieldPtr.IsValid ( );
 }
 
 const FCardRepresentationData* FLPPChunkedDynamicMeshProxy::GetMeshCardRepresentation ( ) const
 {
-	return MeshCards.Get ( );
+	if ( LumenCardData.IsValid ( ) )
+	{
+		return LumenCardData.Get ( );
+	}
+
+	return nullptr;
 }
 
 // Dynamic Render

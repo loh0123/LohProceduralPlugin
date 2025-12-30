@@ -9,8 +9,9 @@
 #include "GameplayTagContainer.h"
 #include "MeshCardBuild.h"
 #include "Components/BaseDynamicMeshComponent.h"
-#include "Components/LPPChunkedDynamicMesh.h"
-#include "Subsystem/LPPProceduralWorldSubsystem.h"
+#include "Components/LPPDynamicMesh.h"
+#include "Rendering/NaniteResources.h"
+#include "Subsystem/LPPProceduralWorldTaskSubsystem.h"
 #include "LPPMarchingMeshComponent.generated.h"
 
 class ULFPChunkedGridPositionComponent;
@@ -75,6 +76,11 @@ public:
 	float      BoundExpand       = 0.0f;
 	float      EdgeMergeDistance = 0.1f;
 
+	bool bMostlyTwoSided = false;
+	bool bNaniteMesh     = false;
+
+	FMeshNaniteSettings NaniteSetting = FMeshNaniteSettings ( );
+
 public:
 
 	bool  bSimplifyRenderData = false;
@@ -110,28 +116,30 @@ public:
 
 	uint16 DataID = 0;
 
-	FDynamicMesh3 MeshData = FDynamicMesh3 ( UE::Geometry::EMeshComponents::FaceGroups );
+	FDynamicMesh3      MeshData        = FDynamicMesh3 ( UE::Geometry::EMeshComponents::FaceGroups );
+	Nanite::FResources NaniteResources = Nanite::FResources ( );
 
-	TArray < FLumenCardBuildData > LumenCardData = TArray < FLumenCardBuildData > ( );
-	FBox                           LumenBound    = FBox ( );
+	FMeshCardsBuildData LumenCardData = FMeshCardsBuildData ( );
 
 	TArray < FKBoxElem > CollisionBoxElems;
 
 	FDateTime StartTime  = FDateTime ( );
 	uint32    WorkLenght = 0;
 
+	bool bIsNaniteValid = false;
+
 public:
 
-	uint32 GetByteCount ( ) const
+	uint32 GetByteCount ( ) const // Need Rework
 	{
-		return sizeof ( FLFPMarchingThreadData ) + MeshData.GetByteCount ( ) + ( sizeof ( FLumenCardBuildData ) * LumenCardData.Num ( ) ) + ( sizeof ( FKBoxElem ) * CollisionBoxElems.Num ( ) );
+		return sizeof ( FLFPMarchingThreadData ) + MeshData.GetByteCount ( ) + ( sizeof ( FKBoxElem ) * CollisionBoxElems.Num ( ) );
 	}
 };
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam ( FLFPOnMarchingMeshGenerateEvent , USceneComponent* , Component );
 
 UCLASS ( ClassGroup=(Custom) , meta=(BlueprintSpawnableComponent) )
-class LOHPROCEDURALPLUGINMARCHING_API ULPPMarchingMeshComponent : public ULPPChunkedDynamicMesh
+class LOHPROCEDURALPLUGINMARCHING_API ULPPMarchingMeshComponent : public ULPPDynamicMesh
 {
 	GENERATED_BODY ( )
 
@@ -226,6 +234,14 @@ protected:
 	UPROPERTY ( EditDefaultsOnly , Category="Setting|DistanceField" )
 	TObjectPtr < UStaticMesh > DistanceFieldFallBackMesh = nullptr;
 
+public:
+
+	UPROPERTY ( EditDefaultsOnly , Category="Setting|Nanite" )
+	bool bGenerateNaniteMesh = false;
+
+	UPROPERTY ( EditDefaultsOnly , Category="Setting|Nanite" )
+	FMeshNaniteSettings NaniteSetting = FMeshNaniteSettings ( );
+
 protected:
 
 	UPROPERTY ( Transient )
@@ -283,24 +299,18 @@ protected:
 	// Add Mesh Fill
 	void UpdateDistanceField ( );
 
-protected:
-
-	virtual FPrimitiveSceneProxy* CreateSceneProxy ( ) override;
-
 public:
 
 	virtual void NotifyMeshUpdated ( ) override;
 
 private:
 
-	std::atomic < bool > bUpdatingThreadData = false;
-
-	FCriticalSection ThreadDataLock;
-
 	TArray < FLumenCardBuildData > CurrentLumenCardData = TArray < FLumenCardBuildData > ( );
 	FBox                           CurrentLumenBound    = FBox ( );
 
-	TAsyncMarchingData MeshComputeData = TAsyncMarchingData ( this );
+	TAsyncProceduralWorldTask MeshComputeData = TAsyncProceduralWorldTask ( this );
+
+	TUniquePtr < FLFPMarchingThreadData > NewThreadData = nullptr;
 
 	static void ComputeNewMarchingMesh_TaskFunction ( TUniquePtr < FLFPMarchingThreadData >& ThreadData , FProgressCancel& Progress , const TBitArray < >& SolidList , const FLFPMarchingPassData& PassData );
 
@@ -308,18 +318,11 @@ private:
 
 private:
 
-	std::atomic < bool > bUpdatingDistanceFieldData = false;
-
 	FTimerHandle DistanceFieldBatchHandler;
 
-	FCriticalSection DistanceFieldDataLock;
+	TAsyncProceduralWorldTask DistanceFieldComputeData = TAsyncProceduralWorldTask ( this );
 
-	TSharedPtr < FDistanceFieldVolumeData , ESPMode::ThreadSafe > DistanceFieldData = nullptr;
-
-	TAsyncMarchingData DistanceFieldComputeData = TAsyncMarchingData ( this );
-
-	// Modify to use ParallelFor. Copy from dynamic mesh
-	static void ComputeNewDistanceField_TaskFunctionV2 ( TUniquePtr < FDistanceFieldVolumeData >& NewData , FProgressCancel& Progress , const FDynamicMesh3& Mesh , const bool bGenerateAsIfTwoSided , const float CurrentDistanceFieldResolutionScale );
+	TUniquePtr < FDistanceFieldVolumeData > NewDistanceFieldData = nullptr;
 
 	// Add Safety
 	void ComputeNewDistanceFieldData_Completed ( TUniquePtr < FDistanceFieldVolumeData >& NewData , TQueue < TFunction < void  ( ) > , EQueueMode::Mpsc >& GameThreadJob );
