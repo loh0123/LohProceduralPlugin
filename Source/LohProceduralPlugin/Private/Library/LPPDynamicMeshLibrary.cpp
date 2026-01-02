@@ -5,6 +5,7 @@
 
 #include "DistanceFieldAtlas.h"
 #include "DynamicMesh/DynamicMeshAABBTree3.h"
+#include "Operations/MeshClusterSimplifier.h"
 #include "Spatial/FastWinding.h"
 
 void ULPPDynamicMeshLibrary::BuildDynamicMeshDistanceField ( FDistanceFieldVolumeData& OutData , FProgressCancel& Progress , const UE::Geometry::FDynamicMesh3& Mesh , const bool bGenerateAsIfTwoSided , const float CurrentDistanceFieldResolutionScale )
@@ -278,7 +279,7 @@ void ULPPDynamicMeshLibrary::BuildDynamicMeshDistanceField ( FDistanceFieldVolum
 				const int32                IndirectionIndex = ComputeLinearMarchingIndex ( Brick.BrickCoordinate , IndirectionDimensions );
 				IndirectionTable [ IndirectionIndex ]       = BrickIndex;
 
-				check ( BrickSizeBytes == Brick.DistanceFieldVolume.Num() * Brick.DistanceFieldVolume.GetTypeSize() );
+				check ( BrickSizeBytes == Brick.DistanceFieldVolume.Num ( ) * Brick.DistanceFieldVolume.GetTypeSize ( ) );
 				FPlatformMemory::Memcpy ( &DistanceFieldBrickData [ BrickIndex * BrickSizeBytes ] , Brick.DistanceFieldVolume.GetData ( ) , Brick.DistanceFieldVolume.Num ( ) * Brick.DistanceFieldVolume.GetTypeSize ( ) );
 			}
 
@@ -302,7 +303,7 @@ void ULPPDynamicMeshLibrary::BuildDynamicMeshDistanceField ( FDistanceFieldVolum
 				OutMip.BulkOffset = StreamableMipData.Num ( );
 				StreamableMipData.AddUninitialized ( MipDataBytes );
 				OutMip.BulkSize = StreamableMipData.Num ( ) - OutMip.BulkOffset;
-				checkf ( OutMip.BulkSize > 0 , TEXT("MarchingDynamicMeshComponent - BulkSize was 0 with %ux%ux%u indirection") , IndirectionDimensions.X , IndirectionDimensions.Y , IndirectionDimensions.Z );
+				checkf ( OutMip.BulkSize > 0 , TEXT ( "MarchingDynamicMeshComponent - BulkSize was 0 with %ux%ux%u indirection" ) , IndirectionDimensions.X , IndirectionDimensions.Y , IndirectionDimensions.Z );
 
 				FPlatformMemory::Memcpy ( &StreamableMipData [ OutMip.BulkOffset ] , IndirectionTable.GetData ( ) , IndirectionTableBytes );
 
@@ -349,15 +350,15 @@ void ULPPDynamicMeshLibrary::BuildDynamicMeshDistanceField ( FDistanceFieldVolum
 		const float BuildTime = static_cast < float > ( FPlatformTime::Seconds ( ) - StartTime );
 
 		if ( BuildTime > 1.0f )
-			UE_LOG ( LogGeometry , Log , TEXT("LPPDynamicMeshLibrary - Finished distance field build in %.1fs - %ux%ux%u sparse distance field, %.1fMb total, %.1fMb always loaded, %u%% occupied, %u triangles") ,
-		         BuildTime ,
-		         Mip0IndirectionDimensions.X * DistanceField::UniqueDataBrickSize ,
-		         Mip0IndirectionDimensions.Y * DistanceField::UniqueDataBrickSize ,
-		         Mip0IndirectionDimensions.Z * DistanceField::UniqueDataBrickSize ,
-		         (OutData.GetResourceSizeBytes() + OutData.StreamableMips.GetBulkDataSize()) / 1024.0f / 1024.0f ,
-		         (OutData.AlwaysLoadedMip.GetAllocatedSize()) / 1024.0f / 1024.0f ,
-		         FMath::RoundToInt(100.0f * OutData.Mips[0].NumDistanceFieldBricks / (float)(Mip0IndirectionDimensions.X * Mip0IndirectionDimensions.Y * Mip0IndirectionDimensions.Z)) ,
-		         Mesh.TriangleCount() );
+			UE_LOG ( LogGeometry , Log , TEXT ( "LPPDynamicMeshLibrary - Finished distance field build in %.1fs - %ux%ux%u sparse distance field, %.1fMb total, %.1fMb always loaded, %u%% occupied, %u triangles" ) ,
+			         BuildTime ,
+			         Mip0IndirectionDimensions.X * DistanceField::UniqueDataBrickSize ,
+			         Mip0IndirectionDimensions.Y * DistanceField::UniqueDataBrickSize ,
+			         Mip0IndirectionDimensions.Z * DistanceField::UniqueDataBrickSize ,
+			         ( OutData.GetResourceSizeBytes ( ) + OutData.StreamableMips.GetBulkDataSize ( ) ) / 1024.0f / 1024.0f ,
+			         ( OutData.AlwaysLoadedMip.GetAllocatedSize ( ) ) / 1024.0f / 1024.0f ,
+			         FMath::RoundToInt ( 100.0f * OutData.Mips [ 0 ].NumDistanceFieldBricks / ( float ) ( Mip0IndirectionDimensions.X * Mip0IndirectionDimensions.Y * Mip0IndirectionDimensions.Z ) ) ,
+			         Mesh.TriangleCount ( ) );
 
 		if ( Progress.Cancelled ( ) )
 		{

@@ -259,24 +259,24 @@ protected:
 public:
 
 	UFUNCTION ( BlueprintCallable , Category="LFPMarchingMeshComponent" )
-	FORCEINLINE FIntVector GetDataSize ( ) const;
+	FIntVector GetDataSize ( ) const;
 
 	UFUNCTION ( BlueprintCallable , Category="LFPMarchingMeshComponent" )
-	FORCEINLINE int32 GetDataNum ( ) const;
+	int32 GetDataNum ( ) const;
 
 	UFUNCTION ( BlueprintCallable , Category="LFPMarchingMeshComponent" )
-	FORCEINLINE FVector GetMeshSize ( ) const;
+	FVector GetMeshSize ( ) const;
 
 	UFUNCTION ( BlueprintCallable , Category="LFPMarchingMeshComponent" )
-	FORCEINLINE bool IsDataComponentValid ( ) const;
+	bool IsDataComponentValid ( ) const;
 
 	UFUNCTION ( BlueprintCallable , Category="LFPMarchingMeshComponent" )
-	FORCEINLINE void GetFaceCullingSetting ( bool& bIsChunkFaceCullingDisable , bool& bIsRegionFaceCullingDisable ) const;
+	void GetFaceCullingSetting ( bool& bIsChunkFaceCullingDisable , bool& bIsRegionFaceCullingDisable ) const;
 
 protected:
 
 	UFUNCTION ( )
-	FORCEINLINE uint8 GetMarchingID ( const FIntVector& Offset ) const;
+	uint8 GetMarchingID ( const FIntVector& Offset ) const;
 
 public:
 

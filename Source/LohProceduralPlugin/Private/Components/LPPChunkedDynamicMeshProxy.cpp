@@ -10,6 +10,7 @@
 #include "PrimitiveUniformShaderParametersBuilder.h"
 #include "RayTracingInstance.h"
 #include "Components/LPPDynamicMesh.h"
+#include "Data/LPPDynamicMeshRenderData.h"
 #include "Materials/MaterialRenderProxy.h"
 
 FLPPChunkedDynamicMeshProxy::FLPPChunkedDynamicMeshProxy ( ULPPDynamicMesh* Component , const float NewDFBias ) : FPrimitiveSceneProxy ( Component )

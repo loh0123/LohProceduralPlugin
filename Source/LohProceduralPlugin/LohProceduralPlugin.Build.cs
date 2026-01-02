@@ -47,7 +47,8 @@ public class LohProceduralPlugin : ModuleRules
 				"LohFunctionPlugin",
 				"RenderCore",
 				"GeometryCore",
-				"GeometryFramework"
+				"GeometryFramework", 
+				"DynamicMesh", "DynamicMesh"
 				// ... add private dependencies that you statically link with here ...	
 			}
 		);

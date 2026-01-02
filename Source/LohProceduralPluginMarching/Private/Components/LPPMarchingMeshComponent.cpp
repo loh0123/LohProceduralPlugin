@@ -6,28 +6,25 @@
 #include "Components/LPPMarchingMeshComponent.h"
 
 #include "DynamicMeshEditor.h"
-#include "DynamicMeshToMeshDescription.h"
 #include "MeshAdapterTransforms.h"
 #include "MeshCardBuild.h"
 #include "MeshSimplification.h"
-#include "NaniteBuilder.h"
 #include "Components/LFPChunkedGridPositionComponent.h"
 #include "Components/LFPChunkedTagDataComponent.h"
-#include "Components/LPPChunkedDynamicMeshProxy.h"
+#include "Data/LPPDynamicMeshRenderData.h"
 #include "Data/LPPMarchingData.h"
-#include "DynamicMesh/DynamicMeshAABBTree3.h"
 #include "DynamicMesh/MeshNormals.h"
 #include "DynamicMesh/Operations/MergeCoincidentMeshEdges.h"
-#include "Generators/MinimalBoxMeshGenerator.h"
 #include "Library/LPPDynamicMeshLibrary.h"
 #include "Library/LPPMarchingFunctionLibrary.h"
 #include "Math/LFPGridLibrary.h"
 #include "Operations/MeshPlaneCut.h"
 #include "Parameterization/DynamicMeshUVEditor.h"
+#include "Polygroups/PolygroupsGenerator.h"
 #include "Render/LFPRenderLibrary.h"
 #include "Runtime/GeometryFramework/Private/Components/DynamicMeshSceneProxy.h"
-#include "Spatial/FastWinding.h"
 #include "Windows/WindowsSemaphore.h"
+
 
 LLM_DEFINE_TAG ( LFPMarchingMesh );
 
@@ -532,6 +529,7 @@ void ULPPMarchingMeshComponent::ComputeNewMarchingMesh_TaskFunction ( TUniquePtr
 		{
 			MeshData->Clear ( );
 			MeshData->EnableAttributes ( );
+			MeshData->Attributes ( )->EnableMaterialID ( );
 		}
 
 		bool bHasMesh = false;
@@ -651,6 +649,13 @@ void ULPPMarchingMeshComponent::ComputeNewMarchingMesh_TaskFunction ( TUniquePtr
 
 			MeshData->RemoveUnusedVertices ( );
 			MeshData->CompactInPlace ( nullptr );
+
+			{
+				UE::Geometry::FPolygroupsGenerator Generator ( MeshData );
+				Generator.bApplyPostProcessing = false;
+				Generator.bCopyToMesh          = true;
+				Generator.FindPolygroupsFromConnectedTris ( );
+			}
 		}
 	}
 
@@ -976,163 +981,54 @@ void ULPPMarchingMeshComponent::ComputeNewMarchingMesh_TaskFunction ( TUniquePtr
 		return;
 	}
 
-	if ( ThreadData->MeshData.TriangleCount ( ) != 0 && PassData.bNaniteMesh )
-	{
-		const FDynamicMesh3& MeshData = ThreadData->MeshData;
-
-		Nanite::IBuilderModule::FInputMeshData InputMeshData;
-
-		FMeshBuildVertexData& VertexData = InputMeshData.Vertices;
-
-		VertexData.UVs.SetNum ( 1 );
-
-		{
-			/** Vertex position */
-			TArray < FVector3f >& MeshPosition = VertexData.Position;
-
-			/** Vertex normal */
-			TArray < FVector3f >& MeshNormal = VertexData.TangentZ;
-
-			/** Vertex color */
-			TArray < FColor >& MeshColor = VertexData.Color;
-
-			/** Vertex texture co-ordinate */
-			TArray < FVector2f >& MeshUV0 = VertexData.UVs [ 0 ];
-
-			TArray < FVector3f >& TangentList   = VertexData.TangentX;
-			TArray < FVector3f >& BiTangentList = VertexData.TangentY;
-			TArray < uint32 >&    IndexList     = InputMeshData.TriangleIndices;
-
-			InputMeshData.NumTexCoords = 1; // Need Rework
-
-			// Section ID
-			TArray < int32 >& MeshMaterial = InputMeshData.MaterialIndices;
-
-			InputMeshData.TriangleCounts.Add ( MeshData.TriangleCount ( ) );
-
-			const int NumTriangles  = MeshData.TriangleCount ( );
-			const int NumVertices   = NumTriangles * 3;
-			const int NumUVOverlays = MeshData.HasAttributes ( ) ? MeshData.Attributes ( )->NumUVLayers ( ) : 0; // One UV Support Only
-
-			const FDynamicMeshNormalOverlay* NormalOverlay = MeshData.HasAttributes ( ) ? MeshData.Attributes ( )->PrimaryNormals ( ) : nullptr;
-			const FDynamicMeshColorOverlay*  ColorOverlay  = MeshData.HasAttributes ( ) ? MeshData.Attributes ( )->PrimaryColors ( ) : nullptr;
-
-			const FDynamicMeshMaterialAttribute* MaterialID = MeshData.HasAttributes ( ) ? MeshData.Attributes ( )->GetMaterialID ( ) : nullptr;
-
-			const bool bHasColor = ColorOverlay != nullptr;
-
-			{
-				MeshPosition.AddUninitialized ( NumVertices );
-				MeshNormal.AddUninitialized ( NumVertices );
-				MeshUV0.AddUninitialized ( NumVertices );
-
-				{
-					MeshMaterial.SetNum ( NumTriangles );
-				}
-
-				if ( bHasColor )
-				{
-					MeshColor.AddUninitialized ( NumVertices );
-				}
-			}
-
-			// populate the triangle array.  we use this for parallelism. 
-			TArray < int32 > TriangleArray;
-			{
-				TriangleArray.Reserve ( NumTriangles );
-				for ( const int32 TriangleID : MeshData.TriangleIndicesItr ( ) )
-				{
-					if ( MeshData.IsTriangle ( TriangleID ) == false )
-					{
-						continue;
-					}
-
-					TriangleArray.Add ( TriangleID );
-				}
-			}
-
-			for ( int32 idx = 0 ; idx < TriangleArray.Num ( ) ; ++idx )
-			{
-				const int32 TriangleID = TriangleArray [ idx ];
-
-				UE::Geometry::FIndex3i TriIndexList       = MeshData.GetTriangle ( TriangleID );
-				UE::Geometry::FIndex3i TriNormalIndexList = ( NormalOverlay != nullptr ) ? NormalOverlay->GetTriangle ( TriangleID ) : UE::Geometry::FIndex3i::Invalid ( );
-				UE::Geometry::FIndex3i TriColorIndexList  = ( ColorOverlay != nullptr ) ? ColorOverlay->GetTriangle ( TriangleID ) : UE::Geometry::FIndex3i::Invalid ( );
-
-				MeshMaterial [ idx ] = MaterialID != nullptr ? MaterialID->GetValue ( TriangleID ) : 0;
-
-				const int32 VertOffset = idx * 3;
-				for ( int32 IndexOffset = 0 ; IndexOffset < 3 ; ++IndexOffset )
-				{
-					const int32 ListIndex     = VertOffset + IndexOffset;
-					const int32 TriangleIndex = TriIndexList [ IndexOffset ];
-					const int32 NormalIndex   = TriNormalIndexList [ IndexOffset ];
-					const int32 ColorIndex    = TriColorIndexList [ IndexOffset ];
-
-					MeshPosition [ ListIndex ] = static_cast < FVector3f > ( MeshData.GetVertex ( TriangleIndex ) );
-					MeshNormal [ ListIndex ]   = NormalIndex != FDynamicMesh3::InvalidID ? NormalOverlay->GetElement ( NormalIndex ) : MeshData.GetVertexNormal ( TriangleIndex );
-
-					InputMeshData.VertexBounds += MeshPosition [ ListIndex ];
-
-					if ( bHasColor )
-					{
-						MeshColor [ ListIndex ] = static_cast < FLinearColor > ( ColorIndex != FDynamicMesh3::InvalidID ? ColorOverlay->GetElement ( ColorIndex ) : static_cast < FVector4f > ( MeshData.GetVertexColor ( TriangleIndex ) ) ).ToFColor ( true );
-					}
-				}
-
-				for ( int32 TexIndex = 0 ; TexIndex < 1 /*NumTexCoords */; ++TexIndex )
-				{
-					const FDynamicMeshUVOverlay* UVOverlay = MeshData.HasAttributes ( ) ? MeshData.Attributes ( )->GetUVLayer ( TexIndex ) : nullptr;
-
-					UE::Geometry::FIndex3i TriUVIndexList = ( UVOverlay != nullptr ) ? UVOverlay->GetTriangle ( TriangleID ) : UE::Geometry::FIndex3i::Invalid ( );
-
-					for ( int32 IndexOffset = 0 ; IndexOffset < 3 ; ++IndexOffset )
-					{
-						const int32 ListIndex = VertOffset + IndexOffset;
-						const int32 UVIndex   = TriUVIndexList [ IndexOffset ];
-
-						MeshUV0 [ ListIndex ] = ( UVIndex != FDynamicMesh3::InvalidID ) ? UVOverlay->GetElement ( UVIndex ) : FVector2f::Zero ( );
-					}
-				}
-			}
-
-			{
-				TangentList.AddUninitialized ( MeshPosition.Num ( ) );
-				BiTangentList.AddUninitialized ( MeshPosition.Num ( ) );
-
-				IndexList.Reserve ( MeshPosition.Num ( ) );
-
-				for ( int32 Index = 0 ; Index < MeshPosition.Num ( ) ; ++Index )
-				{
-					IndexList.Add ( Index );
-
-					UE::Geometry::VectorUtil::MakePerpVectors ( MeshNormal [ Index ] , TangentList [ Index ] , BiTangentList [ Index ] );
-				}
-			}
-		}
-
-
-		{
-			Nanite::IBuilderModule& NaniteBuilderModule = Nanite::IBuilderModule::Get ( );
-
-			// Sections are left empty because they are not used (not building a coarse representation)
-
-			if ( !NaniteBuilderModule.Build (
-			                                 ThreadData->NaniteResources ,
-			                                 InputMeshData ,
-			                                 nullptr , // OutFallbackMeshData
-			                                 nullptr , // OutRayTracingFallbackMeshData
-			                                 nullptr , // RayTracingFallbackBuildSettings
-			                                 PassData.NaniteSetting ) )
-			{
-				UE_LOG ( LogStaticMesh , Error , TEXT("Failed to build Nanite for LPP Dynamic Mesh") );
-			}
-			else
-			{
-				ThreadData->bIsNaniteValid = true;
-			}
-		}
-	}
+	//if ( ThreadData->MeshData.TriangleCount ( ) != 0 && PassData.bNaniteMesh )
+	//{
+	//	const FDynamicMesh3& MeshData = ThreadData->MeshData;
+	//
+	//	Nanite::IBuilderModule::FInputMeshData InputMeshData;
+	//
+	//	FMeshBuildVertexData& VertexData = InputMeshData.Vertices;
+	//
+	//	VertexData.UVs.SetNum ( 1 );
+	//
+	//	{
+	//		/** Vertex position */
+	//		TArray < FVector3f >& MeshPosition = VertexData.Position;
+	//
+	//		/** Vertex normal */
+	//		TArray < FVector3f >& MeshNormal = VertexData.TangentZ;
+	//
+	//		/** Vertex color */
+	//		TArray < FColor >& MeshColor = VertexData.Color;
+	//
+	//		/** Vertex texture co-ordinate */
+	//		TArray < FVector2f >& MeshUV0 = VertexData.UVs [ 0 ];
+	//
+	//		TArray < FVector3f >& TangentList   = VertexData.TangentX;
+	//		TArray < FVector3f >& BiTangentList = VertexData.TangentY;
+	//		TArray < uint32 >&    IndexList     = InputMeshData.TriangleIndices;
+	//
+	//		InputMeshData.NumTexCoords = 1; // Need Rework
+	//
+	//		// Section ID
+	//		TArray < int32 >& MeshMaterial = InputMeshData.MaterialIndices;
+	//
+	//		InputMeshData.TriangleCounts.Add ( MeshData.TriangleCount ( ) );
+	//
+	//		const int NumTriangles  = MeshData.TriangleCount ( );
+	//		const int NumVertices   = NumTriangles * 3;
+	//		const int NumUVOverlays = MeshData.HasAttributes ( ) ? MeshData.Attributes ( )->NumUVLayers ( ) : 0; // One UV Support Only
+	//
+	//		const FDynamicMeshNormalOverlay* NormalOverlay = MeshData.HasAttributes ( ) ? MeshData.Attributes ( )->PrimaryNormals ( ) : nullptr;
+	//		const FDynamicMeshColorOverlay*  ColorOverlay  = MeshData.HasAttributes ( ) ? MeshData.Attributes ( )->PrimaryColors ( ) : nullptr;
+	//
+	//		const FDynamicMeshMaterialAttribute* MaterialID = MeshData.HasAttributes ( ) ? MeshData.Attributes ( )->GetMaterialID ( ) : nullptr;
+	//
+	//		const bool bHasColor = ColorOverlay != nullptr;
+	//
+	//		{
+	//			MeshPosition.AddUninitialized ( NumVertices );
+	////////////////}
 
 	ThreadData->WorkLenght = static_cast < int32 > ( ( FDateTime::UtcNow ( ) - WorkTime ).GetTotalMilliseconds ( ) );
 
@@ -1201,7 +1097,7 @@ void ULPPMarchingMeshComponent::ComputeNewMarchingMesh_Completed ( TUniquePtr < 
 
 				SetMesh ( MoveTemp ( NewRenderData ) , MoveTemp ( NewAgg ) );
 
-				UE_LOG ( LogTemp , Warning , TEXT("Marching Data Time Use : %d ms") , NewThreadData->WorkLenght );
+				UE_LOG ( LogTemp , Warning , TEXT ( "Marching Data Time Use : %d ms" ) , NewThreadData->WorkLenght );
 			}
 
 			NewThreadData.Reset ( );

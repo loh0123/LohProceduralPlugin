@@ -4,6 +4,7 @@
 #include "Components/LPPNaniteChunkedDynamicMeshProxy.h"
 
 #include "EngineModule.h"
+#include "Data/LPPDynamicMeshRenderData.h"
 
 FLPPNaniteChunkedDynamicMeshProxy::FLPPNaniteChunkedDynamicMeshProxy ( const ULPPDynamicMesh* Component ) : FSceneProxyBase ( Component )
 {
@@ -21,36 +22,38 @@ FLPPNaniteChunkedDynamicMeshProxy::FLPPNaniteChunkedDynamicMeshProxy ( const ULP
 
 	Resources = MeshRenderData->NaniteResourcesPtr.Get ( ); // Warning this is not good will cause nullptr if clear mesh
 
-	MaterialMaxIndex = FMath::Max ( Component->GetNumMaterials ( ) - 1 , 0 );
-
-	MaterialSections.SetNum ( MaterialMaxIndex + 1 );
-
-	for ( int32 MaterialIndex = 0 ; MaterialIndex <= MaterialMaxIndex ; ++MaterialIndex )
+	// Material
 	{
-		UMaterialInterface* MaterialInterface = Component->GetMaterial ( MaterialIndex );
+		MaterialMaxIndex = FMath::Max ( Component->GetNumMaterials ( ) - 1 , 0 );
 
-		// TODO: PROG_RASTER (Implement programmable raster support)
-		const bool bInvalidMaterial = !MaterialInterface || !IsOpaqueOrMaskedBlendMode ( *MaterialInterface ) || MaterialInterface->GetShadingModels ( ).HasShadingModel ( MSM_SingleLayerWater );
+		MaterialSections.SetNum ( MaterialMaxIndex + 1 );
 
-		if ( bInvalidMaterial )
+		for ( int32 MaterialIndex = 0 ; MaterialIndex <= MaterialMaxIndex ; ++MaterialIndex )
 		{
-			// force default material 
-			MaterialInterface = UMaterial::GetDefaultMaterial ( MD_Surface );
+			UMaterialInterface* MaterialInterface = Component->GetMaterial ( MaterialIndex );
+
+			const bool bInvalidMaterial = !MaterialInterface || !IsOpaqueOrMaskedBlendMode ( *MaterialInterface ) || MaterialInterface->GetShadingModels ( ).HasShadingModel ( MSM_SingleLayerWater );
+
+			if ( bInvalidMaterial )
+			{
+				// force default material 
+				MaterialInterface = UMaterial::GetDefaultMaterial ( MD_Surface );
+			}
+
+			// Should never be null here
+			check ( MaterialInterface != nullptr );
+
+			// Should always be opaque blend mode here.
+			check ( IsOpaqueOrMaskedBlendMode(*MaterialInterface) );
+
+			MaterialSections [ MaterialIndex ].ShadingMaterialProxy = MaterialInterface->GetRenderProxy ( );
+			MaterialSections [ MaterialIndex ].RasterMaterialProxy  = MaterialInterface->GetRenderProxy ( ); // TODO: PROG_RASTER (Implement programmable raster support)
+			MaterialSections [ MaterialIndex ].MaterialIndex        = MaterialIndex;
+			MaterialSections [ MaterialIndex ].bCastShadow          = true;
 		}
 
-		// Should never be null here
-		check ( MaterialInterface != nullptr );
-
-		// Should always be opaque blend mode here.
-		check ( IsOpaqueOrMaskedBlendMode(*MaterialInterface) );
-
-		MaterialSections [ MaterialIndex ].ShadingMaterialProxy = MaterialInterface->GetRenderProxy ( );
-		MaterialSections [ MaterialIndex ].RasterMaterialProxy  = MaterialInterface->GetRenderProxy ( ); // TODO: PROG_RASTER (Implement programmable raster support)
-		MaterialSections [ MaterialIndex ].MaterialIndex        = MaterialIndex;
-		MaterialSections [ MaterialIndex ].bCastShadow          = true;
+		OnMaterialsUpdated ( );
 	}
-
-	OnMaterialsUpdated ( );
 
 	MeshBounds = static_cast < FBox > ( MeshRenderData->LocalBounds );
 

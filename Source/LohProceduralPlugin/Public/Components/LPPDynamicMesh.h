@@ -7,124 +7,11 @@
 
 #include "CoreMinimal.h"
 #include "LPPChunkedDynamicMeshProxy.h"
-#include "DynamicMesh/DynamicMesh3.h"
 #include "PhysicsEngine/AggregateGeom.h"
 
 #include "LPPDynamicMesh.generated.h"
 
 LLM_DECLARE_TAG ( LFPDynamicMesh );
-
-class LOHPROCEDURALPLUGIN_API FLPPDynamicMeshRenderData
-{
-public:
-
-	FLPPDynamicMeshRenderData ( FLPPDynamicMeshRenderData&& Other ) noexcept : MaterialMapping ( MoveTemp ( Other.MaterialMapping ) ),
-	                                                                           MeshData ( MoveTemp ( Other.MeshData ) ),
-	                                                                           LocalBounds ( MoveTemp ( Other.LocalBounds ) ),
-	                                                                           Bounds ( MoveTemp ( Other.Bounds ) ),
-	                                                                           bHasNaniteFallbackMesh ( Other.bHasNaniteFallbackMesh ),
-	                                                                           bReadyForStreaming ( Other.bReadyForStreaming ),
-	                                                                           bIsInitialized ( Other.bIsInitialized )
-	{
-		if ( Other.NaniteResourcesPtr.IsValid ( ) )
-		{
-			NaniteResourcesPtr = MoveTemp ( Other.NaniteResourcesPtr );
-		}
-
-		if ( Other.LumenCardData.IsValid ( ) )
-		{
-			LumenCardData = MoveTemp ( Other.LumenCardData );
-		}
-
-		if ( Other.DistanceFieldPtr.IsValid ( ) )
-		{
-			DistanceFieldPtr = MoveTemp ( Other.DistanceFieldPtr );
-		}
-	}
-
-	/** Default constructor. */
-	FLPPDynamicMeshRenderData ( );
-
-	~FLPPDynamicMeshRenderData ( );
-
-	/**
-	 * Per-LOD resources. For compatibility reasons, the FStaticMeshLODResources array are not referenced through TRefCountPtr.
-	 * The LODResource still has a ref count of at least 1, see FStaticMeshLODResources() constructor.
-	 */
-	//FStaticMeshLODResourcesArray    LODResources;
-	//FStaticMeshVertexFactoriesArray LODVertexFactories;
-
-	/** Screen size to switch LODs */
-	//FPerPlatformFloat ScreenSize [ MAX_STATIC_MESH_LODS ];
-
-	TArray < uint32 > MaterialMapping;
-
-	FDynamicMesh3 MeshData = FDynamicMesh3 ( );
-
-	TPimplPtr < Nanite::FResources > NaniteResourcesPtr = nullptr;
-
-	TSharedPtr < FCardRepresentationData > LumenCardData = nullptr;
-
-	TSharedPtr < FDistanceFieldVolumeData > DistanceFieldPtr = nullptr;
-
-	/** Ray tracing representation of this mesh, null if not present.  */
-	//FStaticMeshRayTracingProxy* RayTracingProxy = nullptr;
-
-	// Local Bounding Box
-	UE::Geometry::FAxisAlignedBox3d LocalBounds;
-
-	/** Bounds of the renderable mesh. */
-	FBoxSphereBounds Bounds;
-
-#if RHI_RAYTRACING
-	//RayTracing::FGeometryGroupHandle RayTracingGeometryGroupHandle = INDEX_NONE;
-#endif
-
-	bool IsInitialized ( ) const
-	{
-		return bIsInitialized;
-	}
-
-	bool HasValidNaniteData ( ) const;
-
-	bool HasNaniteFallbackMesh ( EShaderPlatform ShaderPlatform ) const;
-
-	bool bHasNaniteFallbackMesh;
-
-	/** True if rhi resources are initialized */
-	bool bReadyForStreaming;
-
-
-	/** Initialize the render resources. */
-	void InitResources ( ERHIFeatureLevel::Type InFeatureLevel , ULPPDynamicMesh* Owner );
-
-	/** Releases the render resources. */
-	void ReleaseResources ( );
-
-	/** Compute the size of this resource. */
-	//void GetResourceSizeEx ( FResourceSizeEx& CumulativeResourceSize ) const;
-
-	/** Get the estimated memory overhead of buffers marked as NeedsCPUAccess. */
-	//SIZE_T GetCPUAccessMemoryOverhead ( ) const;
-
-	// void InitializeRayTracingRepresentationFromRenderingLODs ( );
-
-private:
-
-	bool bIsInitialized = false;
-
-public:
-
-	FORCEINLINE FBoxSphereBounds CalcBoundByMeshData ( const FTransform& LocalToWorld , const float BoundsScale )
-	{
-		FBox LocalBoundingBox = static_cast < FBox > ( LocalBounds );
-		Bounds                = LocalBoundingBox.TransformBy ( LocalToWorld );
-		Bounds.BoxExtent      *= BoundsScale;
-		Bounds.SphereRadius   *= BoundsScale;
-
-		return Bounds;
-	}
-};
 
 UCLASS ( ClassGroup=(Custom) , meta=(BlueprintSpawnableComponent) )
 class LOHPROCEDURALPLUGIN_API ULPPDynamicMesh : public UMeshComponent , public IInterface_CollisionDataProvider
@@ -207,7 +94,7 @@ public:
 
 public:
 
-	FORCEINLINE float GetDistanceFieldSelfShadowBias ( ) const;
+	float GetDistanceFieldSelfShadowBias ( ) const;
 
 public:
 
@@ -222,7 +109,7 @@ public:
 
 public:
 
-	FORCEINLINE const TSharedPtr < FLPPDynamicMeshRenderData >& GetRenderData ( ) const;
+	const TSharedPtr < FLPPDynamicMeshRenderData >& GetRenderData ( ) const;
 
 protected: // Committed Data
 

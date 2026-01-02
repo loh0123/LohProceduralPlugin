@@ -8,7 +8,7 @@ void ULPPProceduralWorldTaskSubsystem::Initialize ( FSubsystemCollectionBase& Co
 	Super::Initialize ( Collection );
 
 	LastTickTime = 0.0f;
-	TickInterval = 1.0f / 60.0f;
+	TickInterval = 1.0f / 240.0f;
 }
 
 void ULPPProceduralWorldTaskSubsystem::Tick ( float DeltaTime )

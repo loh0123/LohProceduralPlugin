@@ -8,7 +8,9 @@
 
 void ULPPMarchingData::PostLoad ( )
 {
+#if WITH_EDITOR
 	GenerateDynamicMeshList ( );
+#endif
 
 	Super::PostLoad ( );
 }
@@ -25,6 +27,7 @@ FLFPMarchingMeshMappingDataV2 ULPPMarchingData::GetMappingData ( const uint8 Mar
 	       : FLFPMarchingMeshMappingDataV2 ( );
 }
 
+#if WITH_EDITOR
 void ULPPMarchingData::AutoFillRotationList ( )
 {
 	for ( FLFPMarchingSingleMeshDataV2& MeshData : MeshDataList )
@@ -141,3 +144,4 @@ void ULPPMarchingData::GenerateDynamicMeshList ( )
 		DynamicMeshAmount += 1;
 	}
 }
+#endif
