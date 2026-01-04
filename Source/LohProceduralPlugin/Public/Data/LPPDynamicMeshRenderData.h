@@ -61,10 +61,6 @@ public:
 
 	TPimplPtr < Nanite::FResources > NaniteResourcesPtr = nullptr;
 
-	//TPimplPtr < Nanite::IBuilderModule::FOutputMeshData > NaniteFallbackPtr = nullptr;
-
-	//TPimplPtr < Nanite::IBuilderModule::FOutputMeshData > NaniteRayTraceFallbackPtr = nullptr;
-
 	TSharedPtr < FCardRepresentationData > LumenCardData = nullptr;
 
 	TSharedPtr < FDistanceFieldVolumeData > DistanceFieldPtr = nullptr;
