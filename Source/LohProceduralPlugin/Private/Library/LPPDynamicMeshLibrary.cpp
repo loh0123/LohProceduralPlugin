@@ -128,17 +128,22 @@ void ULPPDynamicMeshLibrary::BuildDynamicMeshDistanceField ( FDistanceFieldVolum
 			TArray < uint8 > DistanceFieldVolume;
 		};
 
-		for ( int32 MipIndex = 0 ; MipIndex < DistanceField::NumMips ; MipIndex++ )
+		constexpr bool bDisableLOD = true; // TODO : LOD Support If Unreal Rework Distance Field With out IO Loading After Package
+
+		for ( int32 MipIndex = bDisableLOD ? DistanceField::NumMips - 1 : 0 ; MipIndex < DistanceField::NumMips ; MipIndex++ )
 		{
 			if ( Progress.Cancelled ( ) )
 			{
 				return;
 			}
 
-			const FIntVector IndirectionDimensions = FIntVector (
-			                                                     FMath::DivideAndRoundUp ( Mip0IndirectionDimensions.X , 1 << MipIndex ) ,
-			                                                     FMath::DivideAndRoundUp ( Mip0IndirectionDimensions.Y , 1 << MipIndex ) ,
-			                                                     FMath::DivideAndRoundUp ( Mip0IndirectionDimensions.Z , 1 << MipIndex ) );
+			const FIntVector IndirectionDimensions = bDisableLOD
+			                                         ? Mip0IndirectionDimensions
+			                                         : FIntVector (
+			                                                       FMath::DivideAndRoundUp ( Mip0IndirectionDimensions.X , 1 << MipIndex ) ,
+			                                                       FMath::DivideAndRoundUp ( Mip0IndirectionDimensions.Y , 1 << MipIndex ) ,
+			                                                       FMath::DivideAndRoundUp ( Mip0IndirectionDimensions.Z , 1 << MipIndex ) );
+
 
 			// Expand to guarantee one voxel border for gradient reconstruction using bilinear filtering
 			const FVector3f TexelObjectSpaceSize      = LocalSpaceMeshBounds.GetSize ( ) / FVector3f ( IndirectionDimensions * DistanceField::UniqueDataBrickSize - FIntVector ( 2 * DistanceField::MeshDistanceFieldObjectBorder ) );
@@ -333,6 +338,12 @@ void ULPPDynamicMeshLibrary::BuildDynamicMeshDistanceField ( FDistanceFieldVolum
 			OutMip.VolumeToVirtualUVAdd   = VolumePositionExtent * OutMip.VolumeToVirtualUVScale + VirtualUVMin;
 		}
 
+		if ( bDisableLOD )
+		{
+			OutData.Mips [ 0 ] = OutData.Mips [ 2 ];
+			OutData.Mips [ 1 ] = OutData.Mips [ 2 ];
+		}
+
 		OutData.bMostlyTwoSided      = bGenerateAsIfTwoSided;
 		OutData.LocalSpaceMeshBounds = LocalSpaceMeshBounds;
 
@@ -345,7 +356,6 @@ void ULPPDynamicMeshLibrary::BuildDynamicMeshDistanceField ( FDistanceFieldVolum
 		uint8* Ptr = ( uint8* ) OutData.StreamableMips.Realloc ( StreamableMipData.Num ( ) );
 		FMemory::Memcpy ( Ptr , StreamableMipData.GetData ( ) , StreamableMipData.Num ( ) );
 		OutData.StreamableMips.Unlock ( );
-		OutData.StreamableMips.SetBulkDataFlags ( BULKDATA_UsesIoDispatcher ); // TODO : Find Better Way To Not Use IO Dispatcher
 
 		const float BuildTime = static_cast < float > ( FPlatformTime::Seconds ( ) - StartTime );
 
