@@ -1097,7 +1097,7 @@ void ULPPMarchingMeshComponent::ComputeNewMarchingMesh_Completed ( TUniquePtr < 
 					}
 				}
 
-				UE_LOG ( LogTemp , Warning , TEXT ( "Marching Data Time Use : %d ms : %i Vert Count" ) , NewThreadData->WorkLenght , NewRenderData.MeshData.VertexCount ( ) );
+				//UE_LOG ( LogTemp , Warning , TEXT ( "Marching Data Time Use : %d ms : %i Vert Count" ) , NewThreadData->WorkLenght , NewRenderData.MeshData.VertexCount ( ) );
 
 				SetMesh ( MoveTemp ( NewRenderData ) , MoveTemp ( NewAgg ) );
 			}
