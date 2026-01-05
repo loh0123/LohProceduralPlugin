@@ -572,6 +572,8 @@ void ULPPMarchingMeshComponent::ComputeNewMarchingMesh_TaskFunction ( TUniquePtr
 
 					if ( AppendMesh == nullptr )
 					{
+						UE_LOG ( LogTemp , Error , TEXT ( "Marching Data : Mesh Invalid %i" ) , MeshMappingData.MeshID );
+
 						continue;
 					}
 
@@ -1095,9 +1097,9 @@ void ULPPMarchingMeshComponent::ComputeNewMarchingMesh_Completed ( TUniquePtr < 
 					}
 				}
 
-				SetMesh ( MoveTemp ( NewRenderData ) , MoveTemp ( NewAgg ) );
+				UE_LOG ( LogTemp , Warning , TEXT ( "Marching Data Time Use : %d ms : %i Vert Count" ) , NewThreadData->WorkLenght , NewRenderData.MeshData.VertexCount ( ) );
 
-				UE_LOG ( LogTemp , Warning , TEXT ( "Marching Data Time Use : %d ms" ) , NewThreadData->WorkLenght );
+				SetMesh ( MoveTemp ( NewRenderData ) , MoveTemp ( NewAgg ) );
 			}
 
 			NewThreadData.Reset ( );

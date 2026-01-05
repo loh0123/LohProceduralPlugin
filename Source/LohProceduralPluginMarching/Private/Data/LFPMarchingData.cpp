@@ -8,9 +8,7 @@
 
 void ULPPMarchingData::PostLoad ( )
 {
-#if WITH_EDITOR
 	GenerateDynamicMeshList ( );
-#endif
 
 	Super::PostLoad ( );
 }
@@ -102,19 +100,22 @@ void ULPPMarchingData::AutoFillMappingDataList ( )
 	MappingDataList.KeySort ( [] ( const uint8 KeyA , const uint8 KeyB ) { return KeyA < KeyB; } );
 }
 
+#endif
+
 void ULPPMarchingData::GenerateDynamicMeshList ( )
 {
+#if WITH_EDITORONLY_DATA
 	DynamicMeshList.SetNum ( MeshDataList.Num ( ) );
-
-	int32 MeshIndex = INDEX_NONE;
+	StaticMeshList.Reset ( MeshDataList.Num ( ) );
+	StaticMeshList.SetNum ( MeshDataList.Num ( ) );
 
 	DynamicMeshAmount = 0;
 
-	for ( const FLFPMarchingSingleMeshDataV2& MeshData : MeshDataList )
+	for ( int32 MeshDataIndex = 0 ; MeshDataIndex < MeshDataList.Num ( ) ; ++MeshDataIndex )
 	{
-		MeshIndex += 1;
+		const FLFPMarchingSingleMeshDataV2& MeshData = MeshDataList [ MeshDataIndex ];
 
-		const UStaticMesh* StaticMeshData = MeshData.Mesh.LoadSynchronous ( );
+		UStaticMesh* StaticMeshData = MeshData.Mesh.LoadSynchronous ( );
 
 		if ( IsValid ( StaticMeshData ) == false )
 		{
@@ -125,7 +126,7 @@ void ULPPMarchingData::GenerateDynamicMeshList ( )
 		{
 			if ( const FStaticMeshLODResources* LODData = RenderData->GetCurrentFirstLOD ( 0 ) ; LODData != nullptr )
 			{
-				FDynamicMesh3& NewDynamicMeshData = DynamicMeshList [ MeshIndex ];
+				FDynamicMesh3& NewDynamicMeshData = DynamicMeshList [ MeshDataIndex ];
 
 				UE::Geometry::FStaticMeshLODResourcesToDynamicMesh::ConversionOptions ConvertOptions;
 
@@ -138,10 +139,47 @@ void ULPPMarchingData::GenerateDynamicMeshList ( )
 				Welder.Apply ( );
 
 				NewDynamicMeshData.CompactInPlace ( nullptr );
+
+				StaticMeshList [ MeshDataIndex ] = StaticMeshData;
+
+				DynamicMeshAmount += 1;
 			}
 		}
-
-		DynamicMeshAmount += 1;
 	}
-}
+#else
+	if ( StaticMeshList.IsEmpty ( ) == false )
+	{
+		DynamicMeshList.SetNum ( StaticMeshList.Num ( ) );
+
+		for ( int32 MeshDataIndex = 0 ; MeshDataIndex < StaticMeshList.Num ( ) ; ++MeshDataIndex )
+		{
+			UStaticMesh* StaticMeshData = StaticMeshList [ MeshDataIndex ].LoadSynchronous ( );
+
+			if ( IsValid ( StaticMeshData ) == false )
+			{
+				continue;
+			}
+
+			if ( const FStaticMeshRenderData* RenderData = StaticMeshData->GetRenderData ( ) ; RenderData != nullptr )
+			{
+				if ( const FStaticMeshLODResources* LODData = RenderData->GetCurrentFirstLOD ( 0 ) ; LODData != nullptr )
+				{
+					FDynamicMesh3& NewDynamicMeshData = DynamicMeshList [ MeshDataIndex ];
+
+					UE::Geometry::FStaticMeshLODResourcesToDynamicMesh::ConversionOptions ConvertOptions;
+
+					UE::Geometry::FStaticMeshLODResourcesToDynamicMesh Converter;
+					Converter.Convert ( LODData , ConvertOptions , NewDynamicMeshData );
+
+					UE::Geometry::FMergeCoincidentMeshEdges Welder ( &NewDynamicMeshData );
+					Welder.MergeVertexTolerance = 1.0f;
+					Welder.OnlyUniquePairs      = false;
+					Welder.Apply ( );
+
+					NewDynamicMeshData.CompactInPlace ( nullptr );
+				}
+			}
+		}
+	}
 #endif
+}

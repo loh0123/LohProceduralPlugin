@@ -352,8 +352,10 @@ void FLPPChunkedDynamicMeshProxy::InitializeFromData ( )
 	{
 		DistanceFieldPtr = MeshRenderData->DistanceFieldPtr;
 
+		DistanceFieldPtr->bAsyncBuilding = false;
+
 		DFBias                               = ParentComponent->GetDistanceFieldSelfShadowBias ( );
-		bSupportsDistanceFieldRepresentation = true;
+		bSupportsDistanceFieldRepresentation = DistanceFieldPtr->IsValid ( );
 
 		bAffectDistanceFieldLighting = ParentComponent->bAffectDistanceFieldLighting;
 	}

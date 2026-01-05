@@ -345,20 +345,20 @@ void ULPPDynamicMeshLibrary::BuildDynamicMeshDistanceField ( FDistanceFieldVolum
 		uint8* Ptr = ( uint8* ) OutData.StreamableMips.Realloc ( StreamableMipData.Num ( ) );
 		FMemory::Memcpy ( Ptr , StreamableMipData.GetData ( ) , StreamableMipData.Num ( ) );
 		OutData.StreamableMips.Unlock ( );
-		OutData.StreamableMips.SetBulkDataFlags ( BULKDATA_Force_NOT_InlinePayload );
+		OutData.StreamableMips.SetBulkDataFlags ( BULKDATA_UsesIoDispatcher ); // TODO : Find Better Way To Not Use IO Dispatcher
 
 		const float BuildTime = static_cast < float > ( FPlatformTime::Seconds ( ) - StartTime );
 
 		if ( BuildTime > 1.0f )
 			UE_LOG ( LogGeometry , Log , TEXT ( "LPPDynamicMeshLibrary - Finished distance field build in %.1fs - %ux%ux%u sparse distance field, %.1fMb total, %.1fMb always loaded, %u%% occupied, %u triangles" ) ,
-			         BuildTime ,
-			         Mip0IndirectionDimensions.X * DistanceField::UniqueDataBrickSize ,
-			         Mip0IndirectionDimensions.Y * DistanceField::UniqueDataBrickSize ,
-			         Mip0IndirectionDimensions.Z * DistanceField::UniqueDataBrickSize ,
-			         ( OutData.GetResourceSizeBytes ( ) + OutData.StreamableMips.GetBulkDataSize ( ) ) / 1024.0f / 1024.0f ,
-			         ( OutData.AlwaysLoadedMip.GetAllocatedSize ( ) ) / 1024.0f / 1024.0f ,
-			         FMath::RoundToInt ( 100.0f * OutData.Mips [ 0 ].NumDistanceFieldBricks / ( float ) ( Mip0IndirectionDimensions.X * Mip0IndirectionDimensions.Y * Mip0IndirectionDimensions.Z ) ) ,
-			         Mesh.TriangleCount ( ) );
+		         BuildTime ,
+		         Mip0IndirectionDimensions.X * DistanceField::UniqueDataBrickSize ,
+		         Mip0IndirectionDimensions.Y * DistanceField::UniqueDataBrickSize ,
+		         Mip0IndirectionDimensions.Z * DistanceField::UniqueDataBrickSize ,
+		         ( OutData.GetResourceSizeBytes ( ) + OutData.StreamableMips.GetBulkDataSize ( ) ) / 1024.0f / 1024.0f ,
+		         ( OutData.AlwaysLoadedMip.GetAllocatedSize ( ) ) / 1024.0f / 1024.0f ,
+		         FMath::RoundToInt ( 100.0f * OutData.Mips [ 0 ].NumDistanceFieldBricks / ( float ) ( Mip0IndirectionDimensions.X * Mip0IndirectionDimensions.Y * Mip0IndirectionDimensions.Z ) ) ,
+		         Mesh.TriangleCount ( ) );
 
 		if ( Progress.Cancelled ( ) )
 		{

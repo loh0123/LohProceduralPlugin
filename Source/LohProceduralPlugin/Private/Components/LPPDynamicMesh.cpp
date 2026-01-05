@@ -6,11 +6,9 @@
 
 #include "Components/LPPDynamicMesh.h"
 
-#include "Components/LPPNaniteChunkedDynamicMeshProxy.h"
 #include "Data/LPPDynamicMeshRenderData.h"
 #include "Math/BoxSphereBounds.h"
 #include "PhysicsEngine/PhysicsSettings.h"
-#include "Rendering/NaniteResources.h"
 
 LLM_DEFINE_TAG ( LFPDynamicMesh );
 
@@ -484,15 +482,15 @@ FPrimitiveSceneProxy* ULPPDynamicMesh::CreateSceneProxy ( )
 	// Wait For The Data To Commit To Render
 	ReleaseResourcesFence.Wait ( );
 
-	if ( MeshRenderData->HasValidNaniteData ( ) )
-	{
-		check ( MeshRenderData->NaniteResourcesPtr->RuntimeResourceID != INDEX_NONE && MeshRenderData->NaniteResourcesPtr->HierarchyOffset != INDEX_NONE );
-
-		FLPPNaniteChunkedDynamicMeshProxy* NewProxy = new FLPPNaniteChunkedDynamicMeshProxy ( this );
-
-		return NewProxy;
-	}
-	else
+	//if ( MeshRenderData->HasValidNaniteData ( ) )
+	//{
+	//	check ( MeshRenderData->NaniteResourcesPtr->RuntimeResourceID != INDEX_NONE && MeshRenderData->NaniteResourcesPtr->HierarchyOffset != INDEX_NONE );
+	//
+	//	FLPPNaniteChunkedDynamicMeshProxy* NewProxy = new FLPPNaniteChunkedDynamicMeshProxy ( this );
+	//
+	//	return NewProxy;
+	//}
+	//else
 	{
 		FLPPChunkedDynamicMeshProxy* NewProxy = new FLPPChunkedDynamicMeshProxy ( this , DistanceFieldSelfShadowBias );
 

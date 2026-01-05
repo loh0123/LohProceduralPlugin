@@ -91,6 +91,9 @@ protected:
 	/* Mesh Data For Component */
 	TArray < FDynamicMesh3 > DynamicMeshList = TArray < FDynamicMesh3 > ( );
 
+	UPROPERTY ( VisibleAnywhere , Category = Default )
+	TArray < TSoftObjectPtr < UStaticMesh > > StaticMeshList = TArray < TSoftObjectPtr < UStaticMesh > > ( );
+
 	/* What mesh and rotation base on Marching ID */
 	UPROPERTY ( VisibleAnywhere , Category = Default )
 	TMap < uint8 , FLFPMarchingMeshMappingDataV2 > MappingDataList = TMap < uint8 , FLFPMarchingMeshMappingDataV2 > ( );
@@ -146,10 +149,10 @@ protected:
 	UFUNCTION ( CallInEditor , Category = "Function" )
 	void AutoFillMappingDataList ( );
 
+#endif
+
 protected:
 
 	UFUNCTION ( )
-	FORCEINLINE void GenerateDynamicMeshList ( );
-
-#endif
+	void GenerateDynamicMeshList ( );
 };
