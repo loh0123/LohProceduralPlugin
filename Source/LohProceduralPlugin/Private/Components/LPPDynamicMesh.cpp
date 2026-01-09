@@ -457,6 +457,16 @@ void ULPPDynamicMesh::GetUsedMaterials ( TArray < UMaterialInterface* >& OutMate
 	UMeshComponent::GetUsedMaterials ( OutMaterials , bGetDebugMaterials );
 }
 
+void ULPPDynamicMesh::GetResourceSizeEx ( FResourceSizeEx& CumulativeResourceSize )
+{
+	Super::GetResourceSizeEx ( CumulativeResourceSize );
+
+	if ( GetRenderData ( ).IsValid ( ) )
+	{
+		GetRenderData ( )->GetResourceSizeEx ( CumulativeResourceSize );
+	}
+}
+
 float ULPPDynamicMesh::GetDistanceFieldSelfShadowBias ( ) const
 {
 	return DistanceFieldSelfShadowBias;

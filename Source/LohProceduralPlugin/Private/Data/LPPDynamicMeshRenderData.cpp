@@ -102,9 +102,9 @@ void FLPPDynamicMeshRenderData::GetResourceSizeEx ( FResourceSizeEx& CumulativeR
 {
 	CumulativeResourceSize.AddDedicatedSystemMemoryBytes ( sizeof( *this ) );
 
-	CumulativeResourceSize.AddUnknownMemoryBytes ( MaterialMapping.GetAllocatedSize ( ) );
+	CumulativeResourceSize.AddUnknownMemoryBytes ( TEXT ( "MaterialMapping" ) , MaterialMapping.GetAllocatedSize ( ) );
 
-	CumulativeResourceSize.AddUnknownMemoryBytes ( MeshData.GetByteCount ( ) );
+	CumulativeResourceSize.AddUnknownMemoryBytes ( TEXT ( "MeshData" ) , MeshData.GetByteCount ( ) );
 
 	GetNaniteResourcesSizeEx ( NaniteResourcesPtr , CumulativeResourceSize );
 
@@ -200,7 +200,6 @@ void FLPPDynamicMeshRenderData::ReleaseResources ( )
 //
 //	RayTracingProxy->LODVertexFactories = &LODVertexFactories;
 //}
-
 
 bool FLPPDynamicMeshRenderData::HasValidNaniteData ( ) const
 {

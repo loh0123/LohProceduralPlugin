@@ -15,10 +15,12 @@ void ULPPProceduralWorldTaskSubsystem::Tick ( float DeltaTime )
 {
 	Super::Tick ( DeltaTime );
 
-	const int32 JobCount = FMath::FloorToInt ( LastTickTime / TickInterval );
+	//const int32 JobCount = FMath::FloorToInt ( LastTickTime / TickInterval );
 
-	LastTickTime += DeltaTime;
-	LastTickTime -= TickInterval * JobCount;
+	const int32 JobCount = 30;
+
+	//LastTickTime += DeltaTime;
+	//LastTickTime -= TickInterval * JobCount;
 
 	for ( int32 JobIndex = 0 ; LazyGameThreadJobQueue.IsEmpty ( ) == false && JobIndex < JobCount ; ++JobIndex )
 	{
