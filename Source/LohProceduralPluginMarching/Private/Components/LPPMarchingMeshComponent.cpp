@@ -182,6 +182,15 @@ bool ULPPMarchingMeshComponent::UpdateRender ( )
 
 	int32 ValidCount = 0;
 
+	if ( DataComponent->GetDataTagList ( RegionIndex , ChunkIndex ).IsEmpty ( ) )
+	{
+		ClearRender ( );
+
+		OnMeshSkipOnEmpty.Broadcast ( this );
+
+		return false;
+	}
+
 	TBitArray < > CacheDataList = TBitArray ( false , CacheDataIndex );
 	{
 		/* Generate Marching Mesh Data */

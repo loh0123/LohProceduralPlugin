@@ -17,11 +17,19 @@ void ULPPChunkManagerSubsystem::Initialize ( FSubsystemCollectionBase& Collectio
 
 void ULPPChunkManagerSubsystem::Tick ( float DeltaTime )
 {
-	for ( int32 LoadIndex = 0 ; LoadIndex < 8 && AsyncLoadChunk.IsEmpty ( ) == false ; ++LoadIndex )
+	if ( AsyncLoadChunk.IsEmpty ( ) == false )
 	{
-		const FIntVector ChunkIndex = AsyncLoadChunk.Pop ( EAllowShrinking::No );
+		const float CurrentBudget = TickBudget - DeltaTime;
 
-		NotifyChunkLoad ( ChunkIndex.X , ChunkIndex.Y , ChunkIndex.Z );
+		const FDateTime StartWorkTime = FDateTime::UtcNow ( );
+
+		do
+		{
+			const FIntVector ChunkIndex = AsyncLoadChunk.Pop ( EAllowShrinking::No );
+
+			NotifyChunkLoad ( ChunkIndex.X , ChunkIndex.Y , ChunkIndex.Z );
+		}
+		while ( AsyncLoadChunk.IsEmpty ( ) == false && CurrentBudget > ( FDateTime::UtcNow ( ) - StartWorkTime ).GetTotalSeconds ( ) );
 	}
 
 	for ( auto& ActionData : BatchUpdateList )
@@ -37,13 +45,22 @@ TStatId ULPPChunkManagerSubsystem::GetStatId ( ) const
 	RETURN_QUICK_DECLARE_CYCLE_STAT ( ULPPChunkManagerSubsystem , STATGROUP_Tickables );
 }
 
-void ULPPChunkManagerSubsystem::SetupChunkManager ( const TArray < ULFPChunkedTagDataComponent* >& NewDataComponentList , const TArray < ULFPChunkedGridPositionComponent* >& NewPositionComponentList , const TSubclassOf < AActor > NewChunkActorClass , const FVector& NewSpawnOffset , const FVector& ChunkDataSize )
+void ULPPChunkManagerSubsystem::SetupChunkManager (
+	const TArray < ULFPChunkedTagDataComponent* >&      NewDataComponentList ,
+	const TArray < ULFPChunkedGridPositionComponent* >& NewPositionComponentList ,
+	const TSubclassOf < AActor >                        NewChunkActorClass ,
+	const FVector&                                      NewSpawnOffset ,
+	const FVector&                                      ChunkDataSize ,
+	const uint8                                         TargetFrame
+	)
 {
 	DataComponentList     = NewDataComponentList;
 	PositionComponentList = NewPositionComponentList;
 
 	ChunkActorClass = NewChunkActorClass;
 	SpawnOffset     = NewSpawnOffset;
+
+	TickBudget = 1.0f / static_cast < float > ( TargetFrame );
 
 	{
 		for ( AActor* AvailableChunkActor : AvailableChunkList )
@@ -102,7 +119,7 @@ FVector ULPPChunkManagerSubsystem::GetChunkLocation ( const int32 ComponentIndex
 	FVector ChunkLocation = FVector ( PositionComponentList [ ComponentIndex ]->ToChunkGridPosition ( FIntPoint ( RegionIndex , ChunkIndex ) ) ) * ComponentChunkGapList [ ComponentIndex ];
 
 	ChunkLocation.Z += ComponentHeightList [ ComponentIndex ];
-	ChunkLocation += SpawnOffset;
+	ChunkLocation   += SpawnOffset;
 
 	return ChunkLocation;
 }

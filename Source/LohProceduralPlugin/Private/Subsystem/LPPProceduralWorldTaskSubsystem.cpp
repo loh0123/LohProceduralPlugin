@@ -7,25 +7,26 @@ void ULPPProceduralWorldTaskSubsystem::Initialize ( FSubsystemCollectionBase& Co
 {
 	Super::Initialize ( Collection );
 
-	LastTickTime = 0.0f;
-	TickInterval = 1.0f / 240.0f;
+	constexpr float TargetFrame = 30.0f;
+	TickBudget                  = 1.0f / TargetFrame;
 }
 
 void ULPPProceduralWorldTaskSubsystem::Tick ( float DeltaTime )
 {
 	Super::Tick ( DeltaTime );
 
-	//const int32 JobCount = FMath::FloorToInt ( LastTickTime / TickInterval );
+	const float CurrentBudget = TickBudget - DeltaTime;
 
-	const int32 JobCount = 30;
+	const FDateTime StartWorkTime = FDateTime::UtcNow ( );
 
-	//LastTickTime += DeltaTime;
-	//LastTickTime -= TickInterval * JobCount;
-
-	for ( int32 JobIndex = 0 ; LazyGameThreadJobQueue.IsEmpty ( ) == false && JobIndex < JobCount ; ++JobIndex )
+	if ( LazyGameThreadJobQueue.IsEmpty ( ) == false )
 	{
-		( *LazyGameThreadJobQueue.Peek ( ) ) ( );
-		LazyGameThreadJobQueue.Pop ( );
+		do
+		{
+			( *LazyGameThreadJobQueue.Peek ( ) ) ( );
+			LazyGameThreadJobQueue.Pop ( );
+		}
+		while ( LazyGameThreadJobQueue.IsEmpty ( ) == false && CurrentBudget > ( FDateTime::UtcNow ( ) - StartWorkTime ).GetTotalSeconds ( ) );
 	}
 }
 

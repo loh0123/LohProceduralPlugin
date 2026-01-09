@@ -79,6 +79,11 @@ void ULPPDynamicMesh::SetMesh ( FLPPDynamicMeshRenderData&& MoveData , FKAggrega
 	}
 	else
 	{
+		if ( MeshRenderData.IsValid ( ) )
+		{
+			MeshRenderData->ReleaseResources ( );
+		}
+
 		MeshRenderData = MakeShared < FLPPDynamicMeshRenderData > ( MoveTemp ( MoveData ) );
 
 		MeshRenderData->LocalBounds = MeshRenderData->MeshData.GetBounds ( true );

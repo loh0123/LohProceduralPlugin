@@ -62,7 +62,8 @@ public:
 		const TArray < ULFPChunkedGridPositionComponent* >& NewPositionComponentList ,
 		const TSubclassOf < AActor >                        NewChunkActorClass ,
 		const FVector&                                      NewSpawnOffset ,
-		const FVector&                                      ChunkDataSize
+		const FVector&                                      ChunkDataSize ,
+		const uint8                                         TargetFrame
 		);
 
 public:
@@ -131,6 +132,9 @@ protected:
 	TArray < FVector > ComponentChunkGapList;
 
 protected:
+
+	UPROPERTY ( Transient )
+	float TickBudget = 0.0f;
 
 	UPROPERTY ( Transient )
 	TSubclassOf < AActor > ChunkActorClass = nullptr;
