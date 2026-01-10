@@ -156,25 +156,50 @@ void ULPPMarchingMeshComponent::ClearRender ( )
 {
 	MeshComputeData.CancelJob ( );
 	DistanceFieldComputeData.CancelJob ( );
-
-	{
-		FScopeLock TDLock ( &RenderDataLock );
-
-		MeshRenderData.Reset ( );
-	}
-
 	AggGeom.EmptyElements ( );
 
 	ClearMesh ( );
 }
 
-bool ULPPMarchingMeshComponent::UpdateRender ( )
+void ULPPMarchingMeshComponent::UpdateRender ( )
 {
 	if ( IsDataComponentValid ( ) == false )
 	{
 		ClearRender ( );
 
-		return false;
+		return;
+	}
+
+	float DelayTime = 0.001f;
+
+	if ( IsValid ( GetWorld ( ) ) )
+	{
+		APlayerController*    PlayerController = GetWorld ( )->GetFirstPlayerController ( );
+		APlayerCameraManager* CameraManager    = IsValid ( PlayerController ) ? PlayerController->PlayerCameraManager : nullptr;
+
+		if ( IsValid ( CameraManager ) )
+		{
+			const float CameraDist = FVector::Dist ( CameraManager->GetCameraLocation ( ) , GetComponentLocation ( ) );
+
+			DelayTime = FMath::Max ( RenderCameraDistanceDelay * CameraDist , DelayTime );
+		}
+	}
+
+	if ( GetWorld ( )->GetTimerManager ( ).IsTimerActive ( UpdateRenderTimer ) && GetWorld ( )->GetTimerManager ( ).GetTimerRemaining ( UpdateRenderTimer ) < DelayTime )
+	{
+		return;
+	}
+
+	GetWorld ( )->GetTimerManager ( ).SetTimer ( UpdateRenderTimer , this , &ULPPMarchingMeshComponent::UpdateRender_Internal , DelayTime , false );
+}
+
+void ULPPMarchingMeshComponent::UpdateRender_Internal ( )
+{
+	if ( IsDataComponentValid ( ) == false )
+	{
+		ClearRender ( );
+
+		return;
 	}
 
 	const FIntVector& CacheDataSize  = GetDataSize ( ) + FIntVector ( 2 );
@@ -188,7 +213,7 @@ bool ULPPMarchingMeshComponent::UpdateRender ( )
 
 		OnMeshSkipOnEmpty.Broadcast ( this );
 
-		return false;
+		return;
 	}
 
 	TBitArray < > CacheDataList = TBitArray ( false , CacheDataIndex );
@@ -227,7 +252,7 @@ bool ULPPMarchingMeshComponent::UpdateRender ( )
 			OnMeshSkipOnEmpty.Broadcast ( this );
 		}
 
-		return false;
+		return;
 	}
 
 	OnMeshRebuilding.Broadcast ( this );
@@ -284,7 +309,7 @@ bool ULPPMarchingMeshComponent::UpdateRender ( )
 		                            check ( ThreadData.Get ( ) == nullptr );
 	                            } );
 
-	return true;
+	return;
 }
 
 void ULPPMarchingMeshComponent::UpdateDistanceField ( )
@@ -333,17 +358,6 @@ void ULPPMarchingMeshComponent::UpdateDistanceField ( )
 	bool bMostlyTwoSided = bTwoSideDistanceField || IsValid ( GetMaterial ( 0 ) ) ? GetMaterial ( 0 )->IsTwoSided ( ) : false;
 
 	GeoOnlyCopy.Copy ( MeshRenderData->MeshData , false , false , false , false );
-
-	float CurrentDistanceFieldBatchTime = DistanceFieldBatchTime;
-	{
-		if ( IsValid ( GetWorld ( ) ) && IsValid ( GetWorld ( )->GetFirstPlayerController ( ) ) )
-		{
-			const auto  PlayerLocation = GetWorld ( )->GetFirstPlayerController ( )->K2_GetActorLocation ( );
-			const float PriorityTime   = FMath::Max ( FVector::Distance ( PlayerLocation , GetComponentLocation ( ) ) / DistanceFieldPriorityDistance , 1.0f );
-
-			CurrentDistanceFieldBatchTime *= PriorityTime;
-		}
-	}
 
 	GetWorld ( )->GetTimerManager ( ).SetTimer ( DistanceFieldBatchHandler , [this , GeoOnlyCopy , bMostlyTwoSided] ( ) mutable
 	{
@@ -467,7 +481,7 @@ void ULPPMarchingMeshComponent::UpdateDistanceField ( )
 
 			                                     check ( ThreadData.Get ( ) == nullptr );
 		                                     } );
-	} , CurrentDistanceFieldBatchTime , false );
+	} , DistanceFieldBatchTime , false );
 }
 
 void ULPPMarchingMeshComponent::NotifyMeshUpdated ( )

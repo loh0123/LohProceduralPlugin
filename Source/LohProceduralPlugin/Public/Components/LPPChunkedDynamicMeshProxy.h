@@ -11,6 +11,7 @@
 #include "Templates/PimplPtr.h"
 #include "PrimitiveViewRelevance.h"
 #include "Components/BaseDynamicMeshSceneProxy.h"
+#include "Data/LPPDynamicMeshRenderData.h"
 
 class ULPPDynamicMesh;
 class FLPPDynamicMeshRenderData;

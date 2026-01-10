@@ -64,33 +64,41 @@ void ULPPDynamicMesh::SetMesh ( FLPPDynamicMeshRenderData&& MoveData , FKAggrega
 
 	SetMeshCounter += 1;
 
+	TSharedPtr < FDistanceFieldVolumeData > OldDistanceFieldPtr = nullptr;
+
+	if ( MeshRenderData.IsValid ( ) )
+	{
+		MeshRenderData->ReleaseResources ( );
+
+		ReleaseResourcesFence.BeginFence ( );
+
+		ReleaseResourcesFence.Wait ( ); // Flush Render
+	}
+
 	if ( MoveData.MeshData.TriangleCount ( ) == 0 )
 	{
-		if ( MeshRenderData.IsValid ( ) )
-		{
-			MeshRenderData->ReleaseResources ( );
-
-			ReleaseResourcesFence.BeginFence ( );
-
-			ReleaseResourcesFence.Wait ( ); // Flush Render
-
-			MeshRenderData.Reset ( );
-		}
+		MeshRenderData.Reset ( );
 	}
 	else
 	{
 		if ( MeshRenderData.IsValid ( ) )
 		{
-			MeshRenderData->ReleaseResources ( );
+			OldDistanceFieldPtr = MeshRenderData->DistanceFieldPtr; // Cache It For Reuse
 		}
 
 		MeshRenderData = MakeShared < FLPPDynamicMeshRenderData > ( MoveTemp ( MoveData ) );
+
+		if ( MeshRenderData->DistanceFieldPtr.IsValid ( ) == false || MeshRenderData->DistanceFieldPtr->IsValid ( ) == false )
+		{
+			MeshRenderData->DistanceFieldPtr = OldDistanceFieldPtr;
+		}
 
 		MeshRenderData->LocalBounds = MeshRenderData->MeshData.GetBounds ( true );
 
 		AggGeom = MoveTemp ( NewAggGeom );
 
 		UWorld* World = GetWorld ( );
+
 		MeshRenderData->InitResources ( World != nullptr ? World->GetFeatureLevel ( ) : ERHIFeatureLevel::Num , this );
 
 		ReleaseResourcesFence.BeginFence ( );

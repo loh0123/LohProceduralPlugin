@@ -17,12 +17,11 @@ void ULPPChunkManagerSubsystem::Initialize ( FSubsystemCollectionBase& Collectio
 
 void ULPPChunkManagerSubsystem::Tick ( float DeltaTime )
 {
+	const float     CurrentBudget = TickBudget - DeltaTime;
+	const FDateTime StartWorkTime = FDateTime::UtcNow ( );
+
 	if ( AsyncLoadChunk.IsEmpty ( ) == false )
 	{
-		const float CurrentBudget = TickBudget - DeltaTime;
-
-		const FDateTime StartWorkTime = FDateTime::UtcNow ( );
-
 		do
 		{
 			const FIntVector ChunkIndex = AsyncLoadChunk.Pop ( EAllowShrinking::No );
@@ -32,12 +31,26 @@ void ULPPChunkManagerSubsystem::Tick ( float DeltaTime )
 		while ( AsyncLoadChunk.IsEmpty ( ) == false && CurrentBudget > ( FDateTime::UtcNow ( ) - StartWorkTime ).GetTotalSeconds ( ) );
 	}
 
+	TArray < FIntVector > RemoveList;
+
+	RemoveList.Reserve ( BatchUpdateList.Num ( ) );
+
 	for ( auto& ActionData : BatchUpdateList )
 	{
 		NotifyChunkUpdate ( ActionData.Key.X , ActionData.Key.Y , ActionData.Key.Z , ActionData.Value.UpdateDataIndexList.Array ( ) );
+
+		RemoveList.Add ( ActionData.Key );
+
+		if ( CurrentBudget <= ( FDateTime::UtcNow ( ) - StartWorkTime ).GetTotalSeconds ( ) )
+		{
+			break;
+		}
 	}
 
-	BatchUpdateList.Reset ( );
+	for ( const auto& RemoveKey : RemoveList )
+	{
+		BatchUpdateList.Remove ( RemoveKey );
+	}
 }
 
 TStatId ULPPChunkManagerSubsystem::GetStatId ( ) const

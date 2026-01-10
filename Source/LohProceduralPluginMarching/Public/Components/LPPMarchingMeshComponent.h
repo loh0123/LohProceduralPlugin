@@ -197,6 +197,9 @@ protected:
 	UPROPERTY ( EditDefaultsOnly , Category="Setting|Render" )
 	float BoundExpand = 25.0f;
 
+	UPROPERTY ( EditAnywhere , Category = "Setting|Render" )
+	float RenderCameraDistanceDelay = 0.0f;
+
 
 	UPROPERTY ( EditDefaultsOnly , Category="Setting|Simplify" )
 	bool bSimplifyRenderData = false;
@@ -226,7 +229,7 @@ protected:
 	float DistanceFieldResolutionScale = 1.0f;
 
 	UPROPERTY ( EditDefaultsOnly , Category="Setting|DistanceField" )
-	float DistanceFieldBatchTime = 1.0f;
+	float DistanceFieldBatchTime = 0.2f;
 
 	UPROPERTY ( EditDefaultsOnly , Category="Setting|DistanceField" )
 	float DistanceFieldPriorityDistance = 3200.0f;
@@ -292,7 +295,12 @@ public:
 	void ClearRender ( );
 
 	UFUNCTION ( BlueprintCallable , Category = "LFPVoxelRender" )
-	bool UpdateRender ( );
+	void UpdateRender ( );
+
+private:
+
+	UFUNCTION ( )
+	void UpdateRender_Internal ( );
 
 protected:
 
@@ -302,6 +310,11 @@ protected:
 public:
 
 	virtual void NotifyMeshUpdated ( ) override;
+
+private:
+
+	UPROPERTY ( )
+	FTimerHandle UpdateRenderTimer = FTimerHandle ( );
 
 private:
 
