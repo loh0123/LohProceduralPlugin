@@ -20,7 +20,6 @@
 #include "Math/LFPGridLibrary.h"
 #include "Operations/MeshPlaneCut.h"
 #include "Parameterization/DynamicMeshUVEditor.h"
-#include "Polygroups/PolygroupsGenerator.h"
 #include "Render/LFPRenderLibrary.h"
 #include "Runtime/GeometryFramework/Private/Components/DynamicMeshSceneProxy.h"
 #include "Windows/WindowsSemaphore.h"
@@ -42,12 +41,12 @@ ULPPMarchingMeshComponent::ULPPMarchingMeshComponent ( )
 void ULPPMarchingMeshComponent::BeginPlay ( )
 {
 	Super::BeginPlay ( );
-
-	// ...
 }
 
 void ULPPMarchingMeshComponent::EndPlay ( const EEndPlayReason::Type EndPlayReason )
 {
+	Uninitialize ( );
+
 	Super::EndPlay ( EndPlayReason );
 }
 
@@ -55,8 +54,6 @@ void ULPPMarchingMeshComponent::EndPlay ( const EEndPlayReason::Type EndPlayReas
 void ULPPMarchingMeshComponent::TickComponent ( float DeltaTime , ELevelTick TickType , FActorComponentTickFunction* ThisTickFunction )
 {
 	Super::TickComponent ( DeltaTime , TickType , ThisTickFunction );
-
-	// ...
 }
 
 FIntVector ULPPMarchingMeshComponent::GetDataSize ( ) const
@@ -132,6 +129,39 @@ uint8 ULPPMarchingMeshComponent::GetMarchingID ( const FIntVector& Offset ) cons
 	return 0;
 }
 
+float ULPPMarchingMeshComponent::GetPlayerDistance ( ) const
+{
+	if ( IsValid ( GetWorld ( ) ) )
+	{
+		float PlayerDist = 0.0f;
+
+		// Is On Server And Has Authority
+		if ( GetNetMode ( ) != ENetMode::NM_Standalone && GetOwnerRole ( ) == ROLE_Authority )
+		{
+			for ( FConstPlayerControllerIterator PlayerIt = GetWorld ( )->GetPlayerControllerIterator ( ) ; PlayerIt ; ++PlayerIt )
+			{
+				if ( APlayerController* PlayerController = PlayerIt->Get ( ) ; IsValid ( PlayerController ) && IsValid ( PlayerController->GetPawnOrSpectator ( ) ) )
+				{
+					PlayerDist = FMath::Min ( FMath::Max ( FVector::Dist ( PlayerController->GetPawnOrSpectator ( )->K2_GetActorLocation ( ) , GetComponentLocation ( ) ) , 1.0f ) , PlayerDist );
+				}
+			}
+		}
+		else
+		{
+			APlayerController* PlayerController = GetWorld ( )->GetFirstPlayerController ( );
+
+			if ( IsValid ( PlayerController ) && IsValid ( PlayerController->GetPawnOrSpectator ( ) ) )
+			{
+				PlayerDist = FMath::Max ( FVector::Dist ( PlayerController->GetPawnOrSpectator ( )->K2_GetActorLocation ( ) , GetComponentLocation ( ) ) , 1.0f );
+			}
+		}
+
+		return PlayerDist;
+	}
+
+	return -1.0f;
+}
+
 void ULPPMarchingMeshComponent::Initialize ( ULFPChunkedTagDataComponent* NewDataComponent , ULFPChunkedGridPositionComponent* NewPositionComponent , const int32 NewRegionIndex , const int32 NewChunkIndex )
 {
 	if ( IsDataComponentValid ( ) )
@@ -158,6 +188,8 @@ void ULPPMarchingMeshComponent::ClearRender ( )
 	DistanceFieldComputeData.CancelJob ( );
 	AggGeom.EmptyElements ( );
 
+	bIsMeshUpdateNeededAgain = false;
+
 	ClearMesh ( );
 }
 
@@ -172,25 +204,31 @@ void ULPPMarchingMeshComponent::UpdateRender ( )
 
 	float DelayTime = 0.001f;
 
-	if ( IsValid ( GetWorld ( ) ) )
+	FTimerManager& TimerManager = GetWorld ( )->GetTimerManager ( );
 	{
-		APlayerController*    PlayerController = GetWorld ( )->GetFirstPlayerController ( );
-		APlayerCameraManager* CameraManager    = IsValid ( PlayerController ) ? PlayerController->PlayerCameraManager : nullptr;
+		const float PlayerDist = GetPlayerDistance ( );
 
-		if ( IsValid ( CameraManager ) )
+		if ( PlayerDist < FastUpdateRadius )
 		{
-			const float CameraDist = FVector::Dist ( CameraManager->GetCameraLocation ( ) , GetComponentLocation ( ) );
-
-			DelayTime = FMath::Max ( RenderCameraDistanceDelay * CameraDist , DelayTime );
+			DelayTime = 0.001f;
+		}
+		else
+		{
+			DelayTime = FMath::Max ( ( PlayerDist - FastUpdateRadius ) / MeshUpdateBoundRadius , DelayTime );
 		}
 	}
 
-	if ( GetWorld ( )->GetTimerManager ( ).IsTimerActive ( UpdateRenderTimer ) && GetWorld ( )->GetTimerManager ( ).GetTimerRemaining ( UpdateRenderTimer ) < DelayTime )
+	if ( TimerManager.IsTimerActive ( UpdateRenderTimer ) && TimerManager.GetTimerRemaining ( UpdateRenderTimer ) < DelayTime && WasRecentlyRendered ( ) )
 	{
 		return;
 	}
 
-	GetWorld ( )->GetTimerManager ( ).SetTimer ( UpdateRenderTimer , this , &ULPPMarchingMeshComponent::UpdateRender_Internal , DelayTime , false );
+	TimerManager.SetTimer ( UpdateRenderTimer , this , &ULPPMarchingMeshComponent::UpdateRender_Internal , DelayTime , false );
+}
+
+bool ULPPMarchingMeshComponent::IsRendering ( ) const
+{
+	return MeshRenderData.IsValid ( ) && MeshRenderData->IsInitialized ( );
 }
 
 void ULPPMarchingMeshComponent::UpdateRender_Internal ( )
@@ -212,6 +250,13 @@ void ULPPMarchingMeshComponent::UpdateRender_Internal ( )
 		ClearRender ( );
 
 		OnMeshSkipOnEmpty.Broadcast ( this );
+
+		return;
+	}
+
+	if ( MeshComputeData.IsCompleted ( ) == false )
+	{
+		bIsMeshUpdateNeededAgain = true;
 
 		return;
 	}
@@ -286,6 +331,8 @@ void ULPPMarchingMeshComponent::UpdateRender_Internal ( )
 
 	PassData.bMostlyTwoSided = bMostlyTwoSided;
 	PassData.bNaniteMesh     = bGenerateNaniteMesh;
+
+	bIsMeshUpdateNeededAgain = false;
 
 	MeshComputeData.LaunchJob ( TEXT ( "MarchingDynamicMeshComponentMeshData" ) ,
 	                            [this, MovedCacheDataList = MoveTemp ( CacheDataList ),MovedPassData = MoveTemp ( PassData )] ( FProgressCancel& Progress , TQueue < TFunction < void  ( ) > , EQueueMode::Mpsc >& GameThreadJob )
@@ -675,12 +722,13 @@ void ULPPMarchingMeshComponent::ComputeNewMarchingMesh_TaskFunction ( TUniquePtr
 			MeshData->RemoveUnusedVertices ( );
 			MeshData->CompactInPlace ( nullptr );
 
-			{
-				UE::Geometry::FPolygroupsGenerator Generator ( MeshData );
-				Generator.bApplyPostProcessing = false;
-				Generator.bCopyToMesh          = true;
-				Generator.FindPolygroupsFromConnectedTris ( );
-			}
+			// TODO : Nanite
+			//{
+			//	UE::Geometry::FPolygroupsGenerator Generator ( MeshData );
+			//	Generator.bApplyPostProcessing = false;
+			//	Generator.bCopyToMesh          = true;
+			//	Generator.FindPolygroupsFromConnectedTris ( );
+			//}
 		}
 	}
 
@@ -1128,6 +1176,11 @@ void ULPPMarchingMeshComponent::ComputeNewMarchingMesh_Completed ( TUniquePtr < 
 			NewThreadData.Reset ( );
 
 			OnMeshGenerated.Broadcast ( this );
+
+			if ( bIsMeshUpdateNeededAgain )
+			{
+				UpdateRender ( );
+			}
 		} );
 	}
 }

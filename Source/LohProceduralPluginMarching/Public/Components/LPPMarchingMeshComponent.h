@@ -198,7 +198,10 @@ protected:
 	float BoundExpand = 25.0f;
 
 	UPROPERTY ( EditAnywhere , Category = "Setting|Render" )
-	float RenderCameraDistanceDelay = 0.0f;
+	float MeshUpdateBoundRadius = 6400.0f;
+
+	UPROPERTY ( EditAnywhere , Category = "Setting|Render" )
+	float FastUpdateRadius = 3200.0f;
 
 
 	UPROPERTY ( EditDefaultsOnly , Category="Setting|Simplify" )
@@ -231,8 +234,8 @@ protected:
 	UPROPERTY ( EditDefaultsOnly , Category="Setting|DistanceField" )
 	float DistanceFieldBatchTime = 0.2f;
 
-	UPROPERTY ( EditDefaultsOnly , Category="Setting|DistanceField" )
-	float DistanceFieldPriorityDistance = 3200.0f;
+	//UPROPERTY ( EditDefaultsOnly , Category="Setting|DistanceField" )
+	//float DistanceFieldPriorityDistance = 3200.0f;
 
 	UPROPERTY ( EditDefaultsOnly , Category="Setting|DistanceField" )
 	TObjectPtr < UStaticMesh > DistanceFieldFallBackMesh = nullptr;
@@ -259,6 +262,11 @@ protected:
 	UPROPERTY ( Transient )
 	int32 ChunkIndex = INDEX_NONE;
 
+protected:
+
+	UPROPERTY ( VisibleAnywhere , Transient )
+	bool bIsMeshUpdateNeededAgain = false;
+
 public:
 
 	UFUNCTION ( BlueprintCallable , Category="LFPMarchingMeshComponent" )
@@ -281,6 +289,9 @@ protected:
 	UFUNCTION ( )
 	uint8 GetMarchingID ( const FIntVector& Offset ) const;
 
+	UFUNCTION ( )
+	float GetPlayerDistance ( ) const;
+
 public:
 
 	UFUNCTION ( BlueprintCallable , Category="LFPVoxelRender" )
@@ -296,6 +307,9 @@ public:
 
 	UFUNCTION ( BlueprintCallable , Category = "LFPVoxelRender" )
 	void UpdateRender ( );
+
+	UFUNCTION ( BlueprintPure , Category = "LFPVoxelRender" )
+	bool IsRendering ( ) const;
 
 private:
 

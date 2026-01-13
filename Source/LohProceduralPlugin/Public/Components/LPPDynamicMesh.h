@@ -42,7 +42,7 @@ public:
 public:
 
 	virtual void SetMesh ( FLPPDynamicMeshRenderData&& MoveData , FKAggregateGeom&& NewAggGeom );
-	virtual void ClearMesh ( );
+	virtual void ClearMesh ( const bool bAddCounter = true );
 
 public:
 

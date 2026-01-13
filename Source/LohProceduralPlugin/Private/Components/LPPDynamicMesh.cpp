@@ -41,12 +41,7 @@ void ULPPDynamicMesh::EndPlay ( const EEndPlayReason::Type EndPlayReason )
 {
 	Super::EndPlay ( EndPlayReason );
 
-	DestroyPhysicsState ( );
-
-	if ( MeshRenderData.IsValid ( ) && MeshRenderData->IsInitialized ( ) )
-	{
-		MeshRenderData->ReleaseResources ( );
-	}
+	ClearMesh ( );
 }
 
 
@@ -77,7 +72,9 @@ void ULPPDynamicMesh::SetMesh ( FLPPDynamicMeshRenderData&& MoveData , FKAggrega
 
 	if ( MoveData.MeshData.TriangleCount ( ) == 0 )
 	{
-		MeshRenderData.Reset ( );
+		ClearMesh ( false );
+
+		return;
 	}
 	else
 	{
@@ -104,31 +101,42 @@ void ULPPDynamicMesh::SetMesh ( FLPPDynamicMeshRenderData&& MoveData , FKAggrega
 		ReleaseResourcesFence.BeginFence ( );
 	}
 
-	NotifyMeshUpdated ( );
+	if ( GetWorld ( )->bIsTearingDown == false && HasBegunPlay ( ) )
+	{
+		NotifyMeshUpdated ( );
+	}
 }
 
-void ULPPDynamicMesh::ClearMesh ( )
+void ULPPDynamicMesh::ClearMesh ( const bool bAddCounter )
 {
-	ClearMeshCounter += 1;
+	if ( bAddCounter )
+	{
+		ClearMeshCounter += 1;
+	}
 
-	if ( MeshRenderData.IsValid ( ) )
+	AggGeom.EmptyElements ( );
+
+	if ( MeshRenderData.IsValid ( ) && MeshRenderData->IsInitialized ( ) )
 	{
 		MeshRenderData->ReleaseResources ( );
 
 		ReleaseResourcesFence.BeginFence ( );
 
 		ReleaseResourcesFence.Wait ( ); // Flush Render
-
-		MeshRenderData.Reset ( );
 	}
 
-	//MeshCompactData = FLPPChunkedDynamicCompactMeshData ( );
+	MeshRenderData.Reset ( );
 
-	InvalidatePhysicsData ( );
+	if ( GetWorld ( )->bIsTearingDown == false && HasBegunPlay ( ) )
+	{
+		InvalidatePhysicsData ( );
 
-	//const FDynamicMesh3 EmptyMesh;
-
-	NotifyMeshUpdated ( );
+		NotifyMeshUpdated ( );
+	}
+	else
+	{
+		DestroyPhysicsState ( );
+	}
 }
 
 void ULPPDynamicMesh::NotifyMeshUpdated ( )

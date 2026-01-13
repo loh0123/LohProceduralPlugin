@@ -89,11 +89,23 @@ struct TAsyncProceduralWorldTask
 
 	FTimerHandle TaskDelayHandler = FTimerHandle ( );
 
-	FORCEINLINE void CancelJob ( )
+	FORCEINLINE bool IsCompleted ( ) const
 	{
 		check ( Outer.IsExplicitlyNull() == false );
 
-		ULPPProceduralWorldTaskSubsystem* Subsystem = Outer->GetWorld ( )->GetSubsystem < ULPPProceduralWorldTaskSubsystem > ( );
+		if ( LastPendingJobs.IsValid ( ) )
+		{
+			const TSharedPtr < FProceduralWorldComputeJob >& PinJob = LastPendingJobs.Pin ( );
+
+			return PinJob->bCancelled || PinJob->bHasCompleted;
+		}
+
+		return true;
+	}
+
+	FORCEINLINE void CancelJob ( )
+	{
+		check ( Outer.IsExplicitlyNull() == false );
 
 		if ( LastPendingJobs.IsValid ( ) )
 		{
