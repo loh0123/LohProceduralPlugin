@@ -558,7 +558,7 @@ void ULPPMarchingMeshComponent::ComputeNewMarchingMesh_TaskFunction ( TUniquePtr
 	const FIntVector& CacheDataSize = DataSize + FIntVector ( 2 );
 
 	const FVector MeshBoundFullSize = MeshGapSize * FVector ( DataSize );
-	const FVector MeshBoundHalfSize = MeshBoundFullSize * FVector ( 0.5f );
+	const FVector MeshBoundHalfSize = MeshBoundFullSize * FVector ( 0.5 );
 
 	const FIntVector MarchingSize = DataSize + FIntVector ( 1 );
 	const int32      MarchingNum  = MarchingSize.X * MarchingSize.Y * MarchingSize.Z;
@@ -683,7 +683,6 @@ void ULPPMarchingMeshComponent::ComputeNewMarchingMesh_TaskFunction ( TUniquePtr
 				for ( const FVector& EdgeDirection : EdgeDirectionList )
 				{
 					UE::Geometry::FMeshPlaneCut Cut ( MeshData , EdgeDirection * MeshBoundHalfSize , EdgeDirection );
-					Cut.bCollapseDegenerateEdgesOnCut = false;
 					Cut.Cut ( );
 				}
 			}
@@ -711,7 +710,7 @@ void ULPPMarchingMeshComponent::ComputeNewMarchingMesh_TaskFunction ( TUniquePtr
 				UE::Geometry::FQEMSimplification Simplifier ( MeshData );
 
 				Simplifier.bAllowSeamCollapse     = true;
-				Simplifier.bPreserveBoundaryShape = true;
+				//Simplifier.bPreserveBoundaryShape = true;
 				Simplifier.SimplifyToMinimalPlanar ( PassData.SimplifyAngle );
 
 				UE::Geometry::FMeshNormals MeshNormals ( MeshData );
