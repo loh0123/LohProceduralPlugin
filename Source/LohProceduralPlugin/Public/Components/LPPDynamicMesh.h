@@ -64,6 +64,9 @@ protected:
 
 	UPROPERTY ( EditAnywhere , Category = "Setting" )
 	bool bEnableComplexCollision = false;
+	
+	UPROPERTY ( EditAnywhere , Category = "Setting" )
+	bool bStaticRender = true;
 
 public:
 
@@ -105,6 +108,8 @@ public:
 	float GetDistanceFieldSelfShadowBias ( ) const;
 
 public:
+	
+	bool IsPreferStaticDrawPath() const;
 
 	//~ Begin UPrimitiveComponent Interface.
 	FLPPChunkedDynamicMeshProxy* GetBaseSceneProxy ( ) const;

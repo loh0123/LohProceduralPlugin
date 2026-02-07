@@ -14,8 +14,8 @@
 #include "Materials/MaterialRenderProxy.h"
 
 FLPPChunkedDynamicMeshProxy::FLPPChunkedDynamicMeshProxy ( ULPPDynamicMesh* Component , const float NewDFBias ) : FPrimitiveSceneProxy ( Component )
-                                                                                                                  , bEnableRaytracing ( true )
-                                                                                                                  , bPreferStaticDrawPath ( true )
+                                                                                                                  , bEnableRaytracing ( Component->bVisibleInRayTracing )
+                                                                                                                  , bPreferStaticDrawPath ( Component->IsPreferStaticDrawPath ( ) )
                                                                                                                   , MaterialRelevance ( Component->GetMaterialRelevance ( GetScene ( ).GetShaderPlatform ( ) ) )
                                                                                                                   , ParentComponent ( Component )
                                                                                                                   , DFBias ( NewDFBias )
@@ -697,7 +697,7 @@ void FLPPChunkedDynamicMeshProxy::DrawStaticElements ( FStaticPrimitiveDrawInter
 
 	ESceneDepthPriorityGroup DepthPriority = SDPG_World;
 
-	TArray < FMeshRenderBufferSet* > Buffers = AllocatedBufferSets;
+	const TArray < FMeshRenderBufferSet* >& Buffers = AllocatedBufferSets;
 	PDI->ReserveMemoryForMeshes ( Buffers.Num ( ) );
 
 	// Draw the mesh.
@@ -830,7 +830,7 @@ bool FLPPChunkedDynamicMeshProxy::IsCollisionView ( const FEngineShowFlags& Engi
 
 bool FLPPChunkedDynamicMeshProxy::IsRayTracingRelevant ( ) const
 {
-	return true;
+	return bEnableRaytracing;
 }
 
 bool FLPPChunkedDynamicMeshProxy::HasRayTracingRepresentation ( ) const

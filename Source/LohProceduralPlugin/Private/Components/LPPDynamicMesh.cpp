@@ -493,6 +493,11 @@ float ULPPDynamicMesh::GetDistanceFieldSelfShadowBias ( ) const
 	return DistanceFieldSelfShadowBias;
 }
 
+bool ULPPDynamicMesh::IsPreferStaticDrawPath ( ) const
+{
+	return bStaticRender;
+}
+
 FLPPChunkedDynamicMeshProxy* ULPPDynamicMesh::GetBaseSceneProxy ( ) const
 {
 	return static_cast < FLPPChunkedDynamicMeshProxy* > ( GetSceneProxy ( ) );
