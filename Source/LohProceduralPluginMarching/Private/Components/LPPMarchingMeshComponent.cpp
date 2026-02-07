@@ -21,9 +21,7 @@
 #include "Operations/MeshPlaneCut.h"
 #include "Parameterization/DynamicMeshUVEditor.h"
 #include "Render/LFPRenderLibrary.h"
-#include "Runtime/GeometryFramework/Private/Components/DynamicMeshSceneProxy.h"
-#include "Windows/WindowsSemaphore.h"
-
+#include "Windows/WindowsHWrapper.h"
 
 LLM_DEFINE_TAG ( LFPMarchingMesh );
 
@@ -268,6 +266,16 @@ void ULPPMarchingMeshComponent::UpdateRender_Internal ( )
 		{
 			const FIntVector CheckOffset = ULFPGridLibrary::ToGridLocation ( SolidIndex , CacheDataSize ) - FIntVector ( 1 );
 			const FIntVector CheckIndex  = PositionComponent->AddOffsetToDataGridIndex ( FIntVector ( RegionIndex , ChunkIndex , 0 ) , CheckOffset );
+
+			if ( RegionIndex != CheckIndex.X && PositionComponent->IsIsolateRegion ( ) )
+			{
+				continue;
+			}
+
+			if ( ChunkIndex != CheckIndex.Y && PositionComponent->IsIsolateChunk ( ) )
+			{
+				continue;
+			}
 
 			if ( CheckIndex.GetMin ( ) == INDEX_NONE )
 			{
@@ -709,7 +717,7 @@ void ULPPMarchingMeshComponent::ComputeNewMarchingMesh_TaskFunction ( TUniquePtr
 			{
 				UE::Geometry::FQEMSimplification Simplifier ( MeshData );
 
-				Simplifier.bAllowSeamCollapse     = true;
+				Simplifier.bAllowSeamCollapse = true;
 				//Simplifier.bPreserveBoundaryShape = true;
 				Simplifier.SimplifyToMinimalPlanar ( PassData.SimplifyAngle );
 

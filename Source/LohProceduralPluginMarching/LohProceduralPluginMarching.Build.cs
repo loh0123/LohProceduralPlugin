@@ -7,7 +7,7 @@ public class LohProceduralPluginMarching : ModuleRules
 	public LohProceduralPluginMarching(ReadOnlyTargetRules Target) : base(Target)
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
-
+		
 		PublicIncludePaths.AddRange(
 			new string[]
 			{
