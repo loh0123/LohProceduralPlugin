@@ -37,7 +37,7 @@ void ULPPChunkManagerSubsystem::Tick ( float DeltaTime )
 
 	for ( auto& ActionData : BatchUpdateList )
 	{
-		NotifyChunkUpdate ( ActionData.Key.X , ActionData.Key.Y , ActionData.Key.Z , ActionData.Value.UpdateDataIndexList.Array ( ) );
+		NotifyChunkUpdate ( ActionData.Key.X , ActionData.Key.Y , ActionData.Key.Z , ActionData.Value );
 
 		RemoveList.Add ( ActionData.Key );
 
@@ -289,12 +289,14 @@ bool ULPPChunkManagerSubsystem::UnloadChunk ( const int32 ComponentIndex , const
 	return false;
 }
 
-void ULPPChunkManagerSubsystem::RequestChunkUpdate ( const int32 ComponentIndex , const TArray < FIntVector >& GridDataIndexList , const bool bIsolateRegion )
+void ULPPChunkManagerSubsystem::RequestChunkUpdate ( const int32 ComponentIndex , const TArray < FIntVector >& GridDataIndexList , const bool bIsMetaUpdate )
 {
 	if ( ComponentIndex <= INDEX_NONE || IsValid ( PositionComponentList [ ComponentIndex ] ) == false )
 	{
 		return;
 	}
+
+	const bool bIsolateRegion = PositionComponentList [ ComponentIndex ]->IsIsolateRegion ( );
 
 	TMap < FIntPoint , TSet < int32 > > BroadcastChunkIDList;
 
@@ -302,26 +304,31 @@ void ULPPChunkManagerSubsystem::RequestChunkUpdate ( const int32 ComponentIndex 
 	{
 		BroadcastChunkIDList.FindOrAdd ( FIntPoint ( GridDataIndex.X , GridDataIndex.Y ) ).Add ( GridDataIndex.Z );
 
-		const FIntVector DataPos = PositionComponentList [ ComponentIndex ]->ToDataGridPosition ( FIntVector ( 0 , 0 , GridDataIndex.Z ) );
-
-		// Send update to any nearby chunk too if loaded
-		for ( const FIntVector& GridEdgeDir : ULFPGridLibrary::GetGridEdgeDirection ( DataPos , PositionComponentList [ ComponentIndex ]->GetDataGridSize ( ) ) )
+		if ( bIsMetaUpdate == false )
 		{
-			const FIntPoint EdgeChunkIndex = PositionComponentList [ ComponentIndex ]->AddOffsetToChunkGridIndex ( FIntPoint ( GridDataIndex.X , GridDataIndex.Y ) , GridEdgeDir );
+			const FIntVector DataPos = PositionComponentList [ ComponentIndex ]->ToDataGridPosition ( FIntVector ( 0 , 0 , GridDataIndex.Z ) );
 
-			if ( bIsolateRegion && EdgeChunkIndex.X != GridDataIndex.X )
+			// Send update to any nearby chunk too if loaded
+			for ( const FIntVector& GridEdgeDir : ULFPGridLibrary::GetGridEdgeDirection ( DataPos , PositionComponentList [ ComponentIndex ]->GetDataGridSize ( ) ) )
 			{
-				continue;
-			}
+				const FIntPoint EdgeChunkIndex = PositionComponentList [ ComponentIndex ]->AddOffsetToChunkGridIndex ( FIntPoint ( GridDataIndex.X , GridDataIndex.Y ) , GridEdgeDir );
 
-			BroadcastChunkIDList.FindOrAdd ( EdgeChunkIndex );
+				if ( bIsolateRegion && EdgeChunkIndex.X != GridDataIndex.X )
+				{
+					continue;
+				}
+
+				BroadcastChunkIDList.FindOrAdd ( EdgeChunkIndex );
+			}
 		}
 	}
+
 	for ( const TPair < FIntPoint , TSet < int32 > >& ChunkID : BroadcastChunkIDList )
 	{
 		auto& ActionData = BatchUpdateList.FindOrAdd ( FIntVector ( ComponentIndex , ChunkID.Key.X , ChunkID.Key.Y ) );
 
 		ActionData.UpdateDataIndexList.Append ( ChunkID.Value );
+		ActionData.bIsMetaUpdate &= bIsMetaUpdate;
 	}
 }
 
@@ -363,7 +370,7 @@ void ULPPChunkManagerSubsystem::NotifyChunkUnload ( const int32 ComponentIndex ,
 	}
 }
 
-void ULPPChunkManagerSubsystem::NotifyChunkUpdate ( const int32 ComponentIndex , const int32 RegionIndex , const int32 ChunkIndex , const TArray < int32 >& DataIndexList ) const
+void ULPPChunkManagerSubsystem::NotifyChunkUpdate ( const int32 ComponentIndex , const int32 RegionIndex , const int32 ChunkIndex , const FLPPAsyncChunkManagerAction& ActionData ) const
 {
 	const FIntVector ChunkID ( ComponentIndex , RegionIndex , ChunkIndex );
 
@@ -372,7 +379,7 @@ void ULPPChunkManagerSubsystem::NotifyChunkUpdate ( const int32 ComponentIndex ,
 		// Does the chunk actor we spawn have the correct interface?
 		if ( ChunkRef->ChunkActor->Implements < ULPPChunkActorInterface > ( ) )
 		{
-			ILPPChunkActorInterface::Execute_OnRequestChunkUpdate ( ChunkRef->ChunkActor , DataIndexList );
+			ILPPChunkActorInterface::Execute_OnRequestChunkUpdate ( ChunkRef->ChunkActor , ActionData.UpdateDataIndexList.Array ( ) , ActionData.bIsMetaUpdate );
 		}
 		else
 		{

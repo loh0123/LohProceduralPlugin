@@ -366,6 +366,8 @@ void FLPPChunkedDynamicMeshProxy::InitializeFromData ( )
 
 		UpdateVisibleInLumenScene ( );
 	}
+
+	UpdatedReferencedMaterials ( );
 }
 
 void FLPPChunkedDynamicMeshProxy::GetDistanceFieldAtlasData ( const class FDistanceFieldVolumeData*& OutDistanceFieldData , float& SelfShadowBias ) const

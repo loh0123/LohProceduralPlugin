@@ -27,7 +27,7 @@ public:
 	TArray < TObjectPtr < AActor > > LoaderList = TArray < TObjectPtr < AActor > > ( );
 };
 
-USTRUCT ( )
+USTRUCT ( BlueprintType )
 struct FLPPAsyncChunkManagerAction
 {
 	GENERATED_BODY ( )
@@ -36,6 +36,9 @@ public:
 
 	UPROPERTY ( )
 	TSet < int32 > UpdateDataIndexList = TSet < int32 > ( );
+
+	UPROPERTY ( )
+	bool bIsMetaUpdate = true;
 };
 
 /**
@@ -93,7 +96,7 @@ public:
 public:
 
 	UFUNCTION ( BlueprintCallable , meta=(AutoCreateRefTerm="GridDataIndexList") , Category = "Default" )
-	void RequestChunkUpdate ( const int32 ComponentIndex , const TArray < FIntVector >& GridDataIndexList , const bool bIsolateRegion );
+	void RequestChunkUpdate ( const int32 ComponentIndex , const TArray < FIntVector >& GridDataIndexList , const bool bIsMetaUpdate );
 
 protected:
 
@@ -104,7 +107,7 @@ protected:
 	void NotifyChunkUnload ( const int32 ComponentIndex , const int32 RegionIndex , const int32 ChunkIndex ) const;
 
 	UFUNCTION ( )
-	void NotifyChunkUpdate ( const int32 ComponentIndex , const int32 RegionIndex , const int32 ChunkIndex , const TArray < int32 >& DataIndexList ) const;
+	void NotifyChunkUpdate ( const int32 ComponentIndex , const int32 RegionIndex , const int32 ChunkIndex , const FLPPAsyncChunkManagerAction& ActionData ) const;
 
 protected:
 
