@@ -291,6 +291,8 @@ bool ULPPChunkManagerSubsystem::UnloadChunk ( const int32 ComponentIndex , const
 
 void ULPPChunkManagerSubsystem::RequestChunkUpdate ( const int32 ComponentIndex , const TArray < FIntVector >& GridDataIndexList , const bool bIsMetaUpdate )
 {
+	check ( IsInGameThread ( ) )
+
 	if ( ComponentIndex <= INDEX_NONE || IsValid ( PositionComponentList [ ComponentIndex ] ) == false )
 	{
 		return;
@@ -302,6 +304,11 @@ void ULPPChunkManagerSubsystem::RequestChunkUpdate ( const int32 ComponentIndex 
 
 	for ( const FIntVector& GridDataIndex : GridDataIndexList )
 	{
+		if ( GridDataIndex.GetMin ( ) <= INDEX_NONE )
+		{
+			continue;
+		}
+
 		BroadcastChunkIDList.FindOrAdd ( FIntPoint ( GridDataIndex.X , GridDataIndex.Y ) ).Add ( GridDataIndex.Z );
 
 		if ( bIsMetaUpdate == false )
@@ -312,6 +319,11 @@ void ULPPChunkManagerSubsystem::RequestChunkUpdate ( const int32 ComponentIndex 
 			for ( const FIntVector& GridEdgeDir : ULFPGridLibrary::GetGridEdgeDirection ( DataPos , PositionComponentList [ ComponentIndex ]->GetDataGridSize ( ) ) )
 			{
 				const FIntPoint EdgeChunkIndex = PositionComponentList [ ComponentIndex ]->AddOffsetToChunkGridIndex ( FIntPoint ( GridDataIndex.X , GridDataIndex.Y ) , GridEdgeDir );
+
+				if ( EdgeChunkIndex.X == INDEX_NONE || EdgeChunkIndex.Y == INDEX_NONE )
+				{
+					continue;
+				}
 
 				if ( bIsolateRegion && EdgeChunkIndex.X != GridDataIndex.X )
 				{
@@ -325,6 +337,8 @@ void ULPPChunkManagerSubsystem::RequestChunkUpdate ( const int32 ComponentIndex 
 
 	for ( const TPair < FIntPoint , TSet < int32 > >& ChunkID : BroadcastChunkIDList )
 	{
+		check ( ChunkID.Key.X > INDEX_NONE && ChunkID.Key.Y > INDEX_NONE );
+
 		auto& ActionData = BatchUpdateList.FindOrAdd ( FIntVector ( ComponentIndex , ChunkID.Key.X , ChunkID.Key.Y ) );
 
 		ActionData.UpdateDataIndexList.Append ( ChunkID.Value );
