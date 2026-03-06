@@ -377,7 +377,7 @@ void ULPPMarchingMeshComponent::UpdateDistanceField ( )
 	{
 		FScopeLock Lock ( &RenderDataLock );
 
-		if ( DistanceFieldResolutionScale <= 0.0f || MeshRenderData.IsValid ( ) == false || MeshRenderData->MeshData.TriangleCount ( ) == 0 || IsDataComponentValid ( ) == false )
+		if ( DistanceFieldResolutionScale <= 0.0f || MeshRenderData.IsValid ( ) == false || MeshRenderData->MeshData->TriangleCount ( ) == 0 || IsDataComponentValid ( ) == false )
 		{
 			DistanceFieldComputeData.CancelJob ( );
 
@@ -412,7 +412,7 @@ void ULPPMarchingMeshComponent::UpdateDistanceField ( )
 	// Compute whether the mesh uses mainly two-sided materials before, as this is the only info the distance field compute needs from the mesh attributes
 	bool bMostlyTwoSided = bTwoSideDistanceField || IsValid ( GetMaterial ( 0 ) ) ? GetMaterial ( 0 )->IsTwoSided ( ) : false;
 
-	GeoOnlyCopy.Copy ( MeshRenderData->MeshData , false , false , false , false );
+	GeoOnlyCopy.Copy ( *MeshRenderData->MeshData.Get ( ) , false , false , false , false );
 
 	GetWorld ( )->GetTimerManager ( ).SetTimer ( DistanceFieldBatchHandler , [this , GeoOnlyCopy , bMostlyTwoSided] ( ) mutable
 	{
@@ -429,7 +429,7 @@ void ULPPMarchingMeshComponent::UpdateDistanceField ( )
 		{
 			FScopeLock Lock ( &RenderDataLock );
 
-			if ( DistanceFieldResolutionScale <= 0.0f || MeshRenderData.IsValid ( ) == false || MeshRenderData->MeshData.TriangleCount ( ) == 0 || IsDataComponentValid ( ) == false )
+			if ( DistanceFieldResolutionScale <= 0.0f || MeshRenderData.IsValid ( ) == false || MeshRenderData->MeshData->TriangleCount ( ) == 0 || IsDataComponentValid ( ) == false )
 			{
 				DistanceFieldComputeData.CancelJob ( );
 
@@ -1061,7 +1061,7 @@ void ULPPMarchingMeshComponent::ComputeNewMarchingMesh_TaskFunction ( TUniquePtr
 		return;
 	}
 
-	//if ( ThreadData->MeshData.TriangleCount ( ) != 0 && PassData.bNaniteMesh )
+	//if ( ThreadData->MeshData->TriangleCount ( ) != 0 && PassData.bNaniteMesh )
 	//{
 	//	const FDynamicMesh3& MeshData = ThreadData->MeshData;
 	//
@@ -1093,16 +1093,16 @@ void ULPPMarchingMeshComponent::ComputeNewMarchingMesh_TaskFunction ( TUniquePtr
 	//		// Section ID
 	//		TArray < int32 >& MeshMaterial = InputMeshData.MaterialIndices;
 	//
-	//		InputMeshData.TriangleCounts.Add ( MeshData.TriangleCount ( ) );
+	//		InputMeshData.TriangleCounts.Add ( MeshData->TriangleCount ( ) );
 	//
-	//		const int NumTriangles  = MeshData.TriangleCount ( );
+	//		const int NumTriangles  = MeshData->TriangleCount ( );
 	//		const int NumVertices   = NumTriangles * 3;
-	//		const int NumUVOverlays = MeshData.HasAttributes ( ) ? MeshData.Attributes ( )->NumUVLayers ( ) : 0; // One UV Support Only
+	//		const int NumUVOverlays = MeshData->HasAttributes ( ) ? MeshData->Attributes ( )->NumUVLayers ( ) : 0; // One UV Support Only
 	//
-	//		const FDynamicMeshNormalOverlay* NormalOverlay = MeshData.HasAttributes ( ) ? MeshData.Attributes ( )->PrimaryNormals ( ) : nullptr;
-	//		const FDynamicMeshColorOverlay*  ColorOverlay  = MeshData.HasAttributes ( ) ? MeshData.Attributes ( )->PrimaryColors ( ) : nullptr;
+	//		const FDynamicMeshNormalOverlay* NormalOverlay = MeshData->HasAttributes ( ) ? MeshData->Attributes ( )->PrimaryNormals ( ) : nullptr;
+	//		const FDynamicMeshColorOverlay*  ColorOverlay  = MeshData->HasAttributes ( ) ? MeshData->Attributes ( )->PrimaryColors ( ) : nullptr;
 	//
-	//		const FDynamicMeshMaterialAttribute* MaterialID = MeshData.HasAttributes ( ) ? MeshData.Attributes ( )->GetMaterialID ( ) : nullptr;
+	//		const FDynamicMeshMaterialAttribute* MaterialID = MeshData->HasAttributes ( ) ? MeshData->Attributes ( )->GetMaterialID ( ) : nullptr;
 	//
 	//		const bool bHasColor = ColorOverlay != nullptr;
 	//
@@ -1150,9 +1150,9 @@ void ULPPMarchingMeshComponent::ComputeNewMarchingMesh_Completed ( TUniquePtr < 
 			{
 				FScopeLock Lock ( &RenderDataLock );
 
-				//const float CompactMetric = NewThreadData->MeshData.CompactMetric ( );
+				//const float CompactMetric = NewThreadData->MeshData->CompactMetric ( );
 
-				//UE_LOG ( LogTemp , Warning , TEXT("Marching Data : %s") , *TempThreadData->MeshData.MeshInfoString ( ) );
+				//UE_LOG ( LogTemp , Warning , TEXT("Marching Data : %s") , *TempThreadData->MeshData->MeshInfoString ( ) );
 
 				//UE_LOG ( LogTemp , Warning , TEXT("Marching Data Collision : %i") , LocalThreadData->CollisionBoxElems.Num ( ) );
 
@@ -1162,7 +1162,7 @@ void ULPPMarchingMeshComponent::ComputeNewMarchingMesh_Completed ( TUniquePtr < 
 				NewAgg.BoxElems = MoveTemp ( NewThreadData->CollisionBoxElems );
 
 				{
-					NewRenderData.MeshData      = MoveTemp ( NewThreadData->MeshData );
+					NewRenderData.MeshData      = MakePimpl < FDynamicMesh3 > ( MoveTemp ( NewThreadData->MeshData ) );
 					NewRenderData.LumenCardData = MakeShared < FCardRepresentationData > ( );
 
 					NewRenderData.LumenCardData->MeshCardsBuildData = MoveTemp ( NewThreadData->LumenCardData );
@@ -1175,7 +1175,7 @@ void ULPPMarchingMeshComponent::ComputeNewMarchingMesh_Completed ( TUniquePtr < 
 					}
 				}
 
-				//UE_LOG ( LogTemp , Warning , TEXT ( "Marching Data Time Use : %d ms : %i Vert Count" ) , NewThreadData->WorkLenght , NewRenderData.MeshData.VertexCount ( ) );
+				//UE_LOG ( LogTemp , Warning , TEXT ( "Marching Data Time Use : %d ms : %i Vert Count" ) , NewThreadData->WorkLenght , NewRenderData.MeshData->VertexCount ( ) );
 
 				SetMesh ( MoveTemp ( NewRenderData ) , MoveTemp ( NewAgg ) );
 			}

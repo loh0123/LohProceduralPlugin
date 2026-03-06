@@ -57,7 +57,7 @@ public:
 
 	TArray < uint32 > MaterialMapping;
 
-	UE::Geometry::FDynamicMesh3 MeshData = UE::Geometry::FDynamicMesh3 ( );
+	TPimplPtr < UE::Geometry::FDynamicMesh3 > MeshData = nullptr;
 
 	TPimplPtr < Nanite::FResources > NaniteResourcesPtr = nullptr;
 

@@ -61,6 +61,9 @@ void ULPPDynamicMesh::SetMesh ( FLPPDynamicMeshRenderData&& MoveData , FKAggrega
 
 	TSharedPtr < FDistanceFieldVolumeData > OldDistanceFieldPtr = nullptr;
 
+	FLPPDynamicMeshRenderData MovedData = MoveTemp ( MoveData );
+	FKAggregateGeom           MovedAgg  = MoveTemp ( NewAggGeom );
+
 	if ( MeshRenderData.IsValid ( ) )
 	{
 		MeshRenderData->ReleaseResources ( );
@@ -70,7 +73,7 @@ void ULPPDynamicMesh::SetMesh ( FLPPDynamicMeshRenderData&& MoveData , FKAggrega
 		ReleaseResourcesFence.Wait ( ); // Flush Render
 	}
 
-	if ( MoveData.MeshData.TriangleCount ( ) == 0 )
+	if ( MovedData.MeshData->TriangleCount ( ) == 0 )
 	{
 		ClearMesh ( false );
 
@@ -83,16 +86,16 @@ void ULPPDynamicMesh::SetMesh ( FLPPDynamicMeshRenderData&& MoveData , FKAggrega
 			OldDistanceFieldPtr = MeshRenderData->DistanceFieldPtr; // Cache It For Reuse
 		}
 
-		MeshRenderData = MakeShared < FLPPDynamicMeshRenderData > ( MoveTemp ( MoveData ) );
+		MeshRenderData = MakeShared < FLPPDynamicMeshRenderData > ( MoveTemp ( MovedData ) );
 
 		if ( MeshRenderData->DistanceFieldPtr.IsValid ( ) == false || MeshRenderData->DistanceFieldPtr->IsValid ( ) == false )
 		{
 			MeshRenderData->DistanceFieldPtr = OldDistanceFieldPtr;
 		}
 
-		MeshRenderData->LocalBounds = MeshRenderData->MeshData.GetBounds ( true );
+		MeshRenderData->LocalBounds = MeshRenderData->MeshData->GetBounds ( true );
 
-		AggGeom = MoveTemp ( NewAggGeom );
+		AggGeom = MoveTemp ( MovedAgg );
 
 		UWorld* World = GetWorld ( );
 
@@ -152,7 +155,7 @@ void ULPPDynamicMesh::NotifyMaterialSetUpdated ( )
 
 bool ULPPDynamicMesh::GetTriMeshSizeEstimates ( struct FTriMeshCollisionDataEstimates& OutTriMeshEstimates , bool bInUseAllTriData ) const
 {
-	OutTriMeshEstimates.VerticeCount = MeshRenderData->MeshData.VertexCount ( );
+	OutTriMeshEstimates.VerticeCount = MeshRenderData->MeshData->VertexCount ( );
 	return true;
 }
 
@@ -164,29 +167,29 @@ bool ULPPDynamicMesh::GetPhysicsTriMeshData ( struct FTriMeshCollisionData* Coll
 	}
 
 	// See if we should copy UVs
-	const bool bCopyUVs = UPhysicsSettings::Get ( )->bSupportUVFromHitResults && MeshRenderData->MeshData.HasAttributes ( ) && MeshRenderData->MeshData.Attributes ( )->NumUVLayers ( ) > 0;
+	const bool bCopyUVs = UPhysicsSettings::Get ( )->bSupportUVFromHitResults && MeshRenderData->MeshData->HasAttributes ( ) && MeshRenderData->MeshData->Attributes ( )->NumUVLayers ( ) > 0;
 
 	if ( bCopyUVs )
 	{
-		CollisionData->UVs.SetNum ( MeshRenderData->MeshData.Attributes ( )->NumUVLayers ( ) );
+		CollisionData->UVs.SetNum ( MeshRenderData->MeshData->Attributes ( )->NumUVLayers ( ) );
 	}
 
-	const FDynamicMeshMaterialAttribute* MaterialAttrib = MeshRenderData->MeshData.HasAttributes ( ) && MeshRenderData->MeshData.Attributes ( )->HasMaterialID ( ) ? MeshRenderData->MeshData.Attributes ( )->GetMaterialID ( ) : nullptr;
+	const FDynamicMeshMaterialAttribute* MaterialAttrib = MeshRenderData->MeshData->HasAttributes ( ) && MeshRenderData->MeshData->Attributes ( )->HasMaterialID ( ) ? MeshRenderData->MeshData->Attributes ( )->GetMaterialID ( ) : nullptr;
 
 	TArray < int32 > VertexMap;
-	const bool       bIsSparseV = !MeshRenderData->MeshData.IsCompactV ( );
+	const bool       bIsSparseV = !MeshRenderData->MeshData->IsCompactV ( );
 
 	// copy vertices
 	if ( !bCopyUVs )
 	{
 		if ( bIsSparseV )
 		{
-			VertexMap.SetNum ( MeshRenderData->MeshData.MaxVertexID ( ) );
+			VertexMap.SetNum ( MeshRenderData->MeshData->MaxVertexID ( ) );
 		}
-		CollisionData->Vertices.Reserve ( MeshRenderData->MeshData.VertexCount ( ) );
-		for ( int32 vid : MeshRenderData->MeshData.VertexIndicesItr ( ) )
+		CollisionData->Vertices.Reserve ( MeshRenderData->MeshData->VertexCount ( ) );
+		for ( int32 vid : MeshRenderData->MeshData->VertexIndicesItr ( ) )
 		{
-			int32 Index = CollisionData->Vertices.Add ( static_cast < FVector3f > ( MeshRenderData->MeshData.GetVertex ( vid ) ) );
+			int32 Index = CollisionData->Vertices.Add ( static_cast < FVector3f > ( MeshRenderData->MeshData->GetVertex ( vid ) ) );
 			if ( bIsSparseV )
 			{
 				VertexMap [ vid ] = Index;
@@ -200,18 +203,18 @@ bool ULPPDynamicMesh::GetPhysicsTriMeshData ( struct FTriMeshCollisionData* Coll
 	else
 	{
 		// map vertices per wedge
-		VertexMap.SetNumZeroed ( MeshRenderData->MeshData.MaxTriangleID ( ) * 3 );
+		VertexMap.SetNumZeroed ( MeshRenderData->MeshData->MaxTriangleID ( ) * 3 );
 		// temp array to store the UVs on a vertex (per triangle)
 		TArray < FVector2D >            VertUVs;
-		const FDynamicMeshAttributeSet* Attribs     = MeshRenderData->MeshData.Attributes ( );
+		const FDynamicMeshAttributeSet* Attribs     = MeshRenderData->MeshData->Attributes ( );
 		const int32                     NumUVLayers = Attribs->NumUVLayers ( );
-		for ( int32 VID : MeshRenderData->MeshData.VertexIndicesItr ( ) )
+		for ( int32 VID : MeshRenderData->MeshData->VertexIndicesItr ( ) )
 		{
-			FVector3f Pos       = static_cast < FVector3f > ( MeshRenderData->MeshData.GetVertex ( VID ) );
+			FVector3f Pos       = static_cast < FVector3f > ( MeshRenderData->MeshData->GetVertex ( VID ) );
 			int32     VertStart = CollisionData->Vertices.Num ( );
-			MeshRenderData->MeshData.EnumerateVertexTriangles ( VID , [&] ( int32 TID )
+			MeshRenderData->MeshData->EnumerateVertexTriangles ( VID , [&] ( int32 TID )
 			{
-				UE::Geometry::FIndex3i Tri     = MeshRenderData->MeshData.GetTriangle ( TID );
+				UE::Geometry::FIndex3i Tri     = MeshRenderData->MeshData->GetTriangle ( TID );
 				int32                  VSubIdx = Tri.IndexOf ( VID );
 				// Get the UVs on this wedge
 				VertUVs.Reset ( 8 );
@@ -262,11 +265,11 @@ bool ULPPDynamicMesh::GetPhysicsTriMeshData ( struct FTriMeshCollisionData* Coll
 	}
 
 	// copy triangles
-	CollisionData->Indices.Reserve ( MeshRenderData->MeshData.TriangleCount ( ) );
-	CollisionData->MaterialIndices.Reserve ( MeshRenderData->MeshData.TriangleCount ( ) );
-	for ( int32 tid : MeshRenderData->MeshData.TriangleIndicesItr ( ) )
+	CollisionData->Indices.Reserve ( MeshRenderData->MeshData->TriangleCount ( ) );
+	CollisionData->MaterialIndices.Reserve ( MeshRenderData->MeshData->TriangleCount ( ) );
+	for ( int32 tid : MeshRenderData->MeshData->TriangleIndicesItr ( ) )
 	{
-		UE::Geometry::FIndex3i Tri = MeshRenderData->MeshData.GetTriangle ( tid );
+		UE::Geometry::FIndex3i Tri = MeshRenderData->MeshData->GetTriangle ( tid );
 		FTriIndices            Triangle;
 		if ( bCopyUVs )
 		{

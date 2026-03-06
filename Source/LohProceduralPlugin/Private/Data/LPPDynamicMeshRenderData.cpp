@@ -11,12 +11,18 @@
 FLPPDynamicMeshRenderData::FLPPDynamicMeshRenderData ( ) : bHasNaniteFallbackMesh ( false )
                                                            , bReadyForStreaming ( false )
 {
+	MeshData.Reset ( );
+
+	MeshData = MakePimpl < UE::Geometry::FDynamicMesh3 > ( );
+
 	ClearNaniteResources ( NaniteResourcesPtr );
 }
 
 FLPPDynamicMeshRenderData::~FLPPDynamicMeshRenderData ( )
 {
 	check ( bIsInitialized == false );
+
+	MeshData.Reset ( );
 
 	//if (RayTracingProxy != nullptr)
 	//{
@@ -104,7 +110,10 @@ void FLPPDynamicMeshRenderData::GetResourceSizeEx ( FResourceSizeEx& CumulativeR
 
 	CumulativeResourceSize.AddUnknownMemoryBytes ( TEXT ( "MaterialMapping" ) , MaterialMapping.GetAllocatedSize ( ) );
 
-	CumulativeResourceSize.AddUnknownMemoryBytes ( TEXT ( "MeshData" ) , MeshData.GetByteCount ( ) );
+	if ( MeshData.IsValid ( ) )
+	{
+		CumulativeResourceSize.AddUnknownMemoryBytes ( TEXT ( "MeshData" ) , MeshData->GetByteCount ( ) );
+	}
 
 	GetNaniteResourcesSizeEx ( NaniteResourcesPtr , CumulativeResourceSize );
 
@@ -121,7 +130,12 @@ void FLPPDynamicMeshRenderData::GetResourceSizeEx ( FResourceSizeEx& CumulativeR
 
 SIZE_T FLPPDynamicMeshRenderData::GetCPUAccessMemoryOverhead ( ) const
 {
-	return MeshData.GetByteCount ( );
+	if ( MeshData.IsValid ( ) )
+	{
+		return MeshData->GetByteCount ( );
+	}
+
+	return 0;
 }
 
 void FLPPDynamicMeshRenderData::ReleaseResources ( )

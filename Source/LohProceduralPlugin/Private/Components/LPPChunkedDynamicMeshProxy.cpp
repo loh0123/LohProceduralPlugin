@@ -223,7 +223,7 @@ void FLPPChunkedDynamicMeshProxy::InitializeFromData ( )
 		return;
 	}
 
-	if ( MeshRenderData->MeshData.TriangleCount ( ) != 0 )
+	if ( MeshRenderData->MeshData->TriangleCount ( ) != 0 )
 	{
 		/** Vertex position */
 		TArray < FVector3f > MeshPosition = TArray < FVector3f > ( );
@@ -240,14 +240,14 @@ void FLPPChunkedDynamicMeshProxy::InitializeFromData ( )
 		// Section ID
 		TArray < uint8 > MeshMaterial = TArray < uint8 > ( );
 
-		const int NumTriangles  = MeshRenderData->MeshData.TriangleCount ( );
+		const int NumTriangles  = MeshRenderData->MeshData->TriangleCount ( );
 		const int NumVertices   = NumTriangles * 3;
-		const int NumUVOverlays = MeshRenderData->MeshData.HasAttributes ( ) ? MeshRenderData->MeshData.Attributes ( )->NumUVLayers ( ) : 0; // One UV Support Only
+		const int NumUVOverlays = MeshRenderData->MeshData->HasAttributes ( ) ? MeshRenderData->MeshData->Attributes ( )->NumUVLayers ( ) : 0; // One UV Support Only
 
-		const FDynamicMeshNormalOverlay* NormalOverlay = MeshRenderData->MeshData.HasAttributes ( ) ? MeshRenderData->MeshData.Attributes ( )->PrimaryNormals ( ) : nullptr;
-		const FDynamicMeshColorOverlay*  ColorOverlay  = MeshRenderData->MeshData.HasAttributes ( ) ? MeshRenderData->MeshData.Attributes ( )->PrimaryColors ( ) : nullptr;
+		const FDynamicMeshNormalOverlay* NormalOverlay = MeshRenderData->MeshData->HasAttributes ( ) ? MeshRenderData->MeshData->Attributes ( )->PrimaryNormals ( ) : nullptr;
+		const FDynamicMeshColorOverlay*  ColorOverlay  = MeshRenderData->MeshData->HasAttributes ( ) ? MeshRenderData->MeshData->Attributes ( )->PrimaryColors ( ) : nullptr;
 
-		const FDynamicMeshMaterialAttribute* MaterialID = MeshRenderData->MeshData.HasAttributes ( ) ? MeshRenderData->MeshData.Attributes ( )->GetMaterialID ( ) : nullptr;
+		const FDynamicMeshMaterialAttribute* MaterialID = MeshRenderData->MeshData->HasAttributes ( ) ? MeshRenderData->MeshData->Attributes ( )->GetMaterialID ( ) : nullptr;
 
 		const bool bHasColor = ColorOverlay != nullptr;
 
@@ -271,9 +271,9 @@ void FLPPChunkedDynamicMeshProxy::InitializeFromData ( )
 		TArray < int32 > TriangleArray;
 		{
 			TriangleArray.Reserve ( NumTriangles );
-			for ( const int32 TriangleID : MeshRenderData->MeshData.TriangleIndicesItr ( ) )
+			for ( const int32 TriangleID : MeshRenderData->MeshData->TriangleIndicesItr ( ) )
 			{
-				if ( MeshRenderData->MeshData.IsTriangle ( TriangleID ) == false )
+				if ( MeshRenderData->MeshData->IsTriangle ( TriangleID ) == false )
 				{
 					continue;
 				}
@@ -286,7 +286,7 @@ void FLPPChunkedDynamicMeshProxy::InitializeFromData ( )
 		{
 			const int32 TriangleID = TriangleArray [ idx ];
 
-			UE::Geometry::FIndex3i TriIndexList       = MeshRenderData->MeshData.GetTriangle ( TriangleID );
+			UE::Geometry::FIndex3i TriIndexList       = MeshRenderData->MeshData->GetTriangle ( TriangleID );
 			UE::Geometry::FIndex3i TriNormalIndexList = ( NormalOverlay != nullptr ) ? NormalOverlay->GetTriangle ( TriangleID ) : UE::Geometry::FIndex3i::Invalid ( );
 			UE::Geometry::FIndex3i TriColorIndexList  = ( ColorOverlay != nullptr ) ? ColorOverlay->GetTriangle ( TriangleID ) : UE::Geometry::FIndex3i::Invalid ( );
 
@@ -303,18 +303,18 @@ void FLPPChunkedDynamicMeshProxy::InitializeFromData ( )
 				const int32 NormalIndex   = TriNormalIndexList [ IndexOffset ];
 				const int32 ColorIndex    = TriColorIndexList [ IndexOffset ];
 
-				MeshPosition [ ListIndex ] = static_cast < FVector3f > ( MeshRenderData->MeshData.GetVertex ( TriangleIndex ) );
-				MeshNormal [ ListIndex ]   = NormalIndex != FDynamicMesh3::InvalidID ? NormalOverlay->GetElement ( NormalIndex ) : MeshRenderData->MeshData.GetVertexNormal ( TriangleIndex );
+				MeshPosition [ ListIndex ] = static_cast < FVector3f > ( MeshRenderData->MeshData->GetVertex ( TriangleIndex ) );
+				MeshNormal [ ListIndex ]   = NormalIndex != FDynamicMesh3::InvalidID ? NormalOverlay->GetElement ( NormalIndex ) : MeshRenderData->MeshData->GetVertexNormal ( TriangleIndex );
 
 				if ( bHasColor )
 				{
-					MeshColor [ ListIndex ] = static_cast < FLinearColor > ( ColorIndex != FDynamicMesh3::InvalidID ? ColorOverlay->GetElement ( ColorIndex ) : static_cast < FVector4f > ( MeshRenderData->MeshData.GetVertexColor ( TriangleIndex ) ) ).ToFColor ( true );
+					MeshColor [ ListIndex ] = static_cast < FLinearColor > ( ColorIndex != FDynamicMesh3::InvalidID ? ColorOverlay->GetElement ( ColorIndex ) : static_cast < FVector4f > ( MeshRenderData->MeshData->GetVertexColor ( TriangleIndex ) ) ).ToFColor ( true );
 				}
 			}
 
 			for ( int32 TexIndex = 0 ; TexIndex < 1 /*NumTexCoords */; ++TexIndex )
 			{
-				const FDynamicMeshUVOverlay* UVOverlay = MeshRenderData->MeshData.HasAttributes ( ) ? MeshRenderData->MeshData.Attributes ( )->GetUVLayer ( TexIndex ) : nullptr;
+				const FDynamicMeshUVOverlay* UVOverlay = MeshRenderData->MeshData->HasAttributes ( ) ? MeshRenderData->MeshData->Attributes ( )->GetUVLayer ( TexIndex ) : nullptr;
 
 				UE::Geometry::FIndex3i TriUVIndexList = ( UVOverlay != nullptr ) ? UVOverlay->GetTriangle ( TriangleID ) : UE::Geometry::FIndex3i::Invalid ( );
 
