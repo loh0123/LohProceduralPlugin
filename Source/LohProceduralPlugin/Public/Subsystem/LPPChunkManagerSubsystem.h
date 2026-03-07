@@ -20,11 +20,11 @@ struct FLPPLoadedChunkData
 
 public:
 
-	UPROPERTY ( )
+	UPROPERTY ( Transient )
 	TObjectPtr < AActor > ChunkActor = nullptr;
 
-	UPROPERTY ( )
-	TArray < TObjectPtr < AActor > > LoaderList = TArray < TObjectPtr < AActor > > ( );
+	UPROPERTY ( Transient )
+	TArray < TWeakObjectPtr < AActor > > LoaderList = TArray < TWeakObjectPtr < AActor > > ( );
 };
 
 USTRUCT ( BlueprintType )

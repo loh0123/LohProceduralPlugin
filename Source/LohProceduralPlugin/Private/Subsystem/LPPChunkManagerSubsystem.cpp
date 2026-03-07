@@ -7,6 +7,7 @@
 #include "Subsystem/LPPChunkManagerSubsystem.h"
 
 #include "Components/LFPChunkedGridPositionComponent.h"
+#include "GameFramework/GameStateBase.h"
 #include "Interface/LPPChunkActorInterface.h"
 #include "Math/LFPGridLibrary.h"
 
@@ -233,7 +234,7 @@ AActor* ULPPChunkManagerSubsystem::LoadChunk ( const int32 ComponentIndex , cons
 			}
 		}
 
-		return LoadedChunkRef.ChunkActor;
+		return LoadedChunkRef.ChunkActor.Get ( );
 	}
 
 
@@ -429,6 +430,7 @@ AActor* ULPPChunkManagerSubsystem::AllocateChunkActor ( const int32 ComponentInd
 	if ( AvailableChunkList.IsEmpty ( ) )
 	{
 		FActorSpawnParameters SpawnParameters;
+		SpawnParameters.Owner                          = GetWorld ( )->GetGameState ( );
 		SpawnParameters.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 
 		const FTransform SpawnTransform ( GetChunkLocation ( ComponentIndex , RegionIndex , ChunkIndex ) );
