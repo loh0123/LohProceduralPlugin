@@ -113,9 +113,9 @@ uint8 ULPPMarchingMeshComponent::GetMarchingID ( const FIntVector& Offset ) cons
 		{
 			const FIntVector   MarchingOffset = ULFPGridLibrary::ToGridLocation ( MarchingIndex , FIntVector ( 2 ) );
 			const FIntVector   DataIndex      = PositionComponent->AddOffsetToDataGridIndex ( FIntVector ( RegionIndex , ChunkIndex , 0 ) , Offset + MarchingOffset );
-			const FGameplayTag DataTag        = DataComponent->GetDataTag ( DataIndex.X , DataIndex.Y , DataIndex.Z );
+			const FGameplayTag CellTag        = DataComponent->GetCellTag ( DataIndex.X , DataIndex.Y , DataIndex.Z );
 
-			if ( DataTag.MatchesTag ( HandleTag ) )
+			if ( CellTag.MatchesTag ( HandleTag ) )
 			{
 				MarchingID |= ( 1 << MarchingIndex );
 			}
@@ -243,7 +243,7 @@ void ULPPMarchingMeshComponent::UpdateRender_Internal ( )
 
 	int32 ValidCount = 0;
 
-	if ( DataComponent->GetDataTagList ( RegionIndex , ChunkIndex ).IsEmpty ( ) )
+	if ( DataComponent->GetCellTagList ( RegionIndex , ChunkIndex ).IsEmpty ( ) )
 	{
 		ClearRender ( );
 
@@ -282,7 +282,7 @@ void ULPPMarchingMeshComponent::UpdateRender_Internal ( )
 				continue;
 			}
 
-			CacheDataList [ SolidIndex ] = DataComponent->GetDataTag ( CheckIndex.X , CheckIndex.Y , CheckIndex.Z ).MatchesTag ( HandleTag );
+			CacheDataList [ SolidIndex ] = DataComponent->GetCellTag ( CheckIndex.X , CheckIndex.Y , CheckIndex.Z ).MatchesTag ( HandleTag );
 
 			if ( CacheDataList [ SolidIndex ] )
 			{
@@ -493,7 +493,7 @@ void ULPPMarchingMeshComponent::UpdateDistanceField ( )
 				const FIntVector VoxelPos       = ULFPGridLibrary::ToGridLocation ( DataIndex , DataSize );
 				const FIntVector VoxelDataIndex = PositionComponent->AddOffsetToDataGridIndex ( FIntVector ( RegionIndex , ChunkIndex , 0 ) , VoxelPos );
 
-				const FGameplayTag& SelfVoxelTag = DataComponent->GetDataTag ( VoxelDataIndex.X , VoxelDataIndex.Y , VoxelDataIndex.Z );
+				const FGameplayTag& SelfVoxelTag = DataComponent->GetCellTag ( VoxelDataIndex.X , VoxelDataIndex.Y , VoxelDataIndex.Z );
 
 				if ( SelfVoxelTag.MatchesTag ( HandleTag ) )
 				{
@@ -503,7 +503,7 @@ void ULPPMarchingMeshComponent::UpdateDistanceField ( )
 
 						const bool bForceRender = ULFPGridLibrary::IsGridLocationValid ( VoxelPos + LFPMarchingRenderConstantData::FaceDirection [ FaceDirectionIndex ].Up , DataSize ) == false;
 
-						const bool TargetVoxelValid = TargetIndex.GetMin ( ) != INDEX_NONE && DataComponent->GetDataTag ( TargetIndex.X , TargetIndex.Y , TargetIndex.Z ).MatchesTag ( HandleTag );
+						const bool TargetVoxelValid = TargetIndex.GetMin ( ) != INDEX_NONE && DataComponent->GetCellTag ( TargetIndex.X , TargetIndex.Y , TargetIndex.Z ).MatchesTag ( HandleTag );
 
 						// Check Is Border
 						if ( bForceRender && TargetVoxelValid )

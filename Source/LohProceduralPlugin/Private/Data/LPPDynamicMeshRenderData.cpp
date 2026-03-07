@@ -22,8 +22,6 @@ FLPPDynamicMeshRenderData::~FLPPDynamicMeshRenderData ( )
 {
 	check ( bIsInitialized == false );
 
-	MeshData.Reset ( );
-
 	//if (RayTracingProxy != nullptr)
 	//{
 	//	delete RayTracingProxy;
