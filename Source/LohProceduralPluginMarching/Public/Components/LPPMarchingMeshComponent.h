@@ -336,6 +336,8 @@ private:
 	FBox                           CurrentLumenBound    = FBox ( );
 
 	TAsyncProceduralWorldTask MeshComputeData = TAsyncProceduralWorldTask ( this );
+	
+	FCriticalSection NewThreadDataSection;
 
 	TUniquePtr < FLFPMarchingThreadData > NewThreadData = nullptr;
 
@@ -348,6 +350,8 @@ private:
 	FTimerHandle DistanceFieldBatchHandler;
 
 	TAsyncProceduralWorldTask DistanceFieldComputeData = TAsyncProceduralWorldTask ( this );
+	
+	FCriticalSection NewDistanceFieldDataSection;
 
 	TUniquePtr < FDistanceFieldVolumeData > NewDistanceFieldData = nullptr;
 

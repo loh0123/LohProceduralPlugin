@@ -1127,14 +1127,21 @@ void ULPPMarchingMeshComponent::ComputeNewMarchingMesh_Completed ( TUniquePtr < 
 		return;
 	}
 
-	const bool bIsTaskValid = NewThreadData.IsValid ( );
+	bool bIsTaskValid = false;
+	{
+		FScopeLock DataLock ( &NewThreadDataSection );
 
-	NewThreadData = MoveTemp ( ThreadData );
+		bIsTaskValid = NewThreadData.IsValid ( );
+
+		NewThreadData = MoveTemp ( ThreadData );
+	}
 
 	if ( bIsTaskValid == false )
 	{
 		GameThreadJob.Enqueue ( [ this] ( )
 		{
+			check ( IsInGameThread ( ) )
+
 			check ( NewThreadData.IsValid ( ) );
 
 			if ( IsValidLowLevel ( ) == false || IsValid ( this ) == false )
@@ -1148,7 +1155,8 @@ void ULPPMarchingMeshComponent::ComputeNewMarchingMesh_Completed ( TUniquePtr < 
 			}
 
 			{
-				FScopeLock Lock ( &RenderDataLock );
+				FScopeLock DataLock ( &NewThreadDataSection );
+				FScopeLock RenderLock ( &RenderDataLock );
 
 				//const float CompactMetric = NewThreadData->MeshData->CompactMetric ( );
 
@@ -1199,21 +1207,29 @@ void ULPPMarchingMeshComponent::ComputeNewDistanceFieldData_Completed ( TUniqueP
 		return;
 	}
 
-	const bool bIsTaskValid = NewDistanceFieldData.IsValid ( );
+	bool bIsTaskValid = false;
+	{
+		FScopeLock DataLock ( &NewDistanceFieldDataSection );
 
-	NewDistanceFieldData = MoveTemp ( NewData );
+		bIsTaskValid = NewDistanceFieldData.IsValid ( );
+
+		NewDistanceFieldData = MoveTemp ( NewData );
+	}
 
 	if ( bIsTaskValid == false )
 	{
 		GameThreadJob.Enqueue (
 		                       [this] ( )
 		                       {
+			                       check ( IsInGameThread ( ) )
+
 			                       if ( IsValid ( this ) == false )
 			                       {
 				                       return;
 			                       }
 
-			                       FScopeLock Lock ( &RenderDataLock );
+			                       FScopeLock DataLock ( &NewDistanceFieldDataSection );
+			                       FScopeLock RenderLock ( &RenderDataLock );
 
 			                       if ( MeshRenderData.IsValid ( ) )
 			                       {
